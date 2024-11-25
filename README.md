@@ -1,7 +1,7 @@
 
 ## Remote Lua Loader
 
-Remote lua loader for PS4 and PS5, based on gezine's [finding](https://github.com/Gezine/ArtemisLuaLoader/) that allows games built with Artemis engine to load arbitrary lua file. Currently this loader is specific for Raspberry Cube (CUSA16074). The loader is not firmware dependant, and has been successfully tested on PS5 Pro 10.20.
+Remote lua loader for PS4 and PS5, based on gezine's [finding](https://github.com/Gezine/ArtemisLuaLoader/) that allows games built with Artemis engine to load arbitrary lua file. Currently this loader is specific for Raspberry Cube (CUSA16074) and Aibeya (CUSA17068). The loader is not firmware dependant, and has been successfully tested on PS5 Pro 10.20.
 
 ### Usage on jailbroken PS4 with disc version
 
