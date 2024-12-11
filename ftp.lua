@@ -10,11 +10,13 @@
 -- entering a directory MAY (not always) shutdown the connection to user.
 -- transferring files can shutdown the connection to user.
 
--- todo:
--- fix whatever it is that's slowing down the server.
--- send files and receive files
--- auth tls
--- support more ftp commands.
+-- to do!
+-- fix bugs, connection, slowness etc..
+-- add commands:
+
+-- critical commands: DELE, STOR, RETR, RNFR, RNTO, REST, SIZE
+-- important commands: MKD, RMD, NLST, MLSD
+-- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
 
 -- @horror.
 conn_types = {
