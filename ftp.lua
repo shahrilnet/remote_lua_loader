@@ -8,6 +8,7 @@
 
 -- known issues:
 -- entering a directory MAY (not always) shutdown the connection to user.
+-- transferring files can shutdown the connection to user.
 
 -- todo:
 -- fix whatever it is that's slowing down the server.
