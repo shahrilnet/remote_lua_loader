@@ -221,6 +221,10 @@ function sceUnlink(path)
     return syscall.unlink(path):tonumber()
 end
 
+function sceSocketClose(sck)
+    return syscall.socketclose(sck):tonumber()
+end
+
 function sceFileExists(path)
     local st = bump.alloc(120)
     if sceStat(path, st) < 0 then 
@@ -455,10 +459,19 @@ function ftp_send_cwd(cmd)
         return
     end
 
+    sceKernelSendNotificationRequest("Request Dir: " .. cmd)
+
     if new_path == "/" then
         ftp.client.cur_path = "/"
+        ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
     elseif new_path == ".." then
         ftp.client.cur_path = dir_up(ftp.client.cur_path)
+        if ftp.client.cur_path == "/" then
+            ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
+        else
+            ftp.client.cur_path = "/"
+            ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
+        end
     else
         local tmp_path
         if new_path:sub(1, 1) == "/" then
@@ -474,7 +487,6 @@ function ftp_send_cwd(cmd)
         if tmp_path ~= "/" then
             if sceOpen(tmp_path, 0, 0) < 0 then
                 ftp_send_ctrl_msg("550 Invalid directory.\r\n")
-                return
             end
         end
 
@@ -521,6 +533,10 @@ function ftp_send_feat()
 end
 
 function ftp_send_cdup()
+    if ftp.client.cur_path == "/" then
+        ftp_send_ctrl_msg("200 Command okay\r\n")
+        return
+    end
     ftp.client.cur_path = dir_up(ftp.client.cur_path);
     ftp_send_ctrl_msg("200 Command okay\r\n")
 end
@@ -692,12 +708,14 @@ function ftp_client_th()
             sceKernelSendNotificationRequest("Requested: " .. cmd .. ", But it's not implemented.")
         end
     end
-    sceNetSocketClose(ftp.client.ctrl_sockfd)
+    sceClose(ftp.client.ctrl_sockfd)
+    sceClose(ftp.client.data_sockfd)
+    sceClose(ftp.client.pasv_sockfd)
 end
 
 function ftp_init()
     local f = io.open("/av_contents/content_tmp/ftp.txt", "w")
-    f:write("hello")
+    f:write("file created by ftp server.")
     f:close()
 
     ftp.client.cur_path = ftp.client.root_path
@@ -711,7 +729,7 @@ function ftp_init()
     memory.write_dword(enable, 1)
     if sceNetSetsockopt(ftp.server.server_sockfd, SCE_NET_SOL_SOCKET, SCE_NET_SO_REUSEADDR, enable, 4) < 0 then
         errorf("sceNetSetsockopt() error: " .. get_error_string())
-        sceNetSocketClose(ftp.server.server_sockfd)
+        sceClose(ftp.server.server_sockfd)
         return
     end
 
@@ -721,30 +739,26 @@ function ftp_init()
 
     if sceNetBind(ftp.server.server_sockfd, ftp.server.server_sockaddr, 16) < 0 then
         errorf("sceNetBind() error(INIT): " .. get_error_string())
-        sceNetSocketClose(ftp.server.server_sockfd)
+        sceClose(ftp.server.server_sockfd)
         return
     end
 
     if sceNetListen(ftp.server.server_sockfd, 128) < 0 then
         errorf("sceNetListen() error: " .. get_error_string())
-        sceNetSocketClose(ftp.server.server_sockfd)
+        sceClose(ftp.server.server_sockfd)
         return
     end
 
     sceKernelSendNotificationRequest("FTP Server listening on port " .. ftp.server.port)
 
     while true do
-        ftp.client.ctrl_sockfd = sceNetAccept(ftp.server.server_sockfd, ftp.client.ctrl_sockaddr,
-            ftp.client.ctrl_sockaddr_len)
+        ftp.client.ctrl_sockfd = sceNetAccept(ftp.server.server_sockfd, ftp.client.ctrl_sockaddr, ftp.client.ctrl_sockaddr_len)
         if ftp.client.ctrl_sockfd >= 0 then
-            local client_th = coroutine.create(ftp_client_th)
-            coroutine.resume(client_th, "client_thread")
-            coroutine.yield()
-            --sceNetSocketClose(ftp.client.ctrl_sockfd)
+            ftp_client_th()
             break
         end
     end
-    sceNetSocketClose(ftp.server.server_sockfd)
+    sceClose(ftp.server.server_sockfd)
     sceKernelSendNotificationRequest("FTP Server closed")
 end
 
@@ -756,6 +770,8 @@ function main()
         access = 33,
         readlink = 58,
         connect = 98,
+        netabort = 101,
+        socketclose = 114,
         rename = 128,
         sendto = 133, -- send.
         mkdir = 136,
@@ -767,8 +783,7 @@ function main()
         lseek = 478
     })
 
-    local ftp_co = coroutine.create(ftp_init)
-    coroutine.resume(ftp_co, "ftp_task")
+    ftp_init()
 end
 
 main()
