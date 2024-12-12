@@ -3,8 +3,6 @@
 -- FileZilla Setup:
 -- Open the Site Manager.
 -- In General tab, set encryption to "Only use plain FTP (insecure)". We don't have TLS, yet.
--- In Transfer Settings tab, set to "Active"
--- And don't forget to change the IP in this file on line 29 to match your PS4 / PS5's ip.
 
 -- known issues:
 -- entering a directory MAY (not always) shutdown the connection to user.
