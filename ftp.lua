@@ -14,8 +14,7 @@
 -- fix bugs, connection, slowness etc..
 -- add commands:
 
--- critical commands: DELE, STOR, RETR, RNFR, RNTO, REST
--- important commands: NLST, MLSD
+-- critical commands: STOR, RETR, REST
 -- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
 
 -- @horror.
@@ -217,6 +216,19 @@ end
 
 function sceRename(old, new)
     return syscall.rename(old, new):tonumber()
+end
+
+function sceUnlink(path)
+    return syscall.unlink(path):tonumber()
+end
+
+function sceFileExists(path)
+    local st = bump.alloc(120)
+    if sceStat(path, st) < 0 then 
+        return false
+    else
+        return true
+    end
 end
 
 function sceNetInetPton(addr)
@@ -580,6 +592,42 @@ function ftp_send_rmd(cmd)
     end
 end
 
+function ftp_send_dele(cmd)
+    local path = cmd:match("^RMD (.+)")
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+
+    if sceUnlink(dir) < 0 then
+        ftp_send_ctrl_msg("550 Could not delete the file\r\n")
+    else
+        ftp_send_ctrl_msg("226 File deleted\r\n")
+    end
+end
+
+function ftp_send_rnfr(cmd)
+    local path = cmd:match("^RNFR (.+)")
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+
+    if sceFileExists(dir) then
+        ftp.server.rname = path
+        ftp_send_ctrl_msg("350 Remembered filename\r\n")
+        return
+    end
+    ftp_send_ctrl_msg("550 The file doesn't exist\r\n")
+end
+
+function ftp_send_rnto(cmd)
+    local path = cmd:match("^RNTO (.+)")
+    local dir_old = string.format("%s/%s", ftp.client.cur_path, ftp.server.rname)
+    local dir_new = string.format("%s/%s", ftp.client.cur_path, path)
+
+    if sceRename(dir_old, dir_new) < 0 then
+        ftp_send_ctrl_msg("550 Error renaming file\r\n")
+        return
+    else
+        ftp_send_ctrl_msg("226 Renamed file\r\n")
+    end
+end
+
 function ftp_client_th()
     local recv_buffer = bump.alloc(512)
     local recv_len = nil
@@ -621,6 +669,12 @@ function ftp_client_th()
             ftp_send_rmd(cmd)
         elseif cmd:match("^SIZE (.+)") then
             ftp_send_size(cmd)
+        elseif cmd:match("^DELE (.+)") then
+            ftp_send_dele(cmd)
+        elseif cmd:match("^RNFR (.+)") then
+            ftp_send_rnfr(cmd)
+        elseif cmd:match("^RNTO (.+)") then
+            ftp_send_rnto(cmd)
         --elseif cmd:match("^RETR") then
         --    ftp_send_file("/app0/sce_module/libc.prx")
         --elseif cmd:match("^STOR") then
@@ -636,6 +690,10 @@ function ftp_client_th()
 end
 
 function ftp_init()
+    local f = io.open("/av_contents/content_tmp/ftp.txt", "w")
+    f:write("hello")
+    f:close()
+
     ftp.client.cur_path = ftp.client.root_path
     ftp.server.server_sockfd = sceNetSocket(AF_INET, SOCK_STREAM, 0)
     if ftp.server.server_sockfd < 0 then
