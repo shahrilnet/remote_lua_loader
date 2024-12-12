@@ -4,7 +4,7 @@
 -- Open the Site Manager.
 -- In General tab, set encryption to "Only use plain FTP (insecure)". We don't have TLS, yet.
 -- In Transfer Settings tab, set to "Active"
--- And don't forget to change the IP in this file on line 27 to match your PS4 / PS5's ip.
+-- And don't forget to change the IP in this file on line 29 to match your PS4 / PS5's ip.
 
 -- known issues:
 -- entering a directory MAY (not always) shutdown the connection to user.
@@ -48,14 +48,13 @@ ftp = {
         pasv_sockaddr_len = bump.alloc(8),
         ctrl_sockaddr_len = bump.alloc(8),
 
-        pasv_port = 9045,
         data_port = nil,
 
         root_path = "/",
         cur_path = "",
         conn_type = conn_types.none,
-        transfer_type = "A",
-        restore_point = 0
+        transfer_type = "I",
+        restore_point = -1
     }
 }
 
@@ -247,7 +246,7 @@ function ftp_open_data_conn()
     if ftp.client.conn_type == conn_types.active then
         sceNetConnect(ftp.client.data_sockfd, ftp.client.data_sockaddr, 16)
     else
-        memory.write_word(ftp.client.pasv_sockaddr_len, 16)
+        memory.write_byte(ftp.client.pasv_sockaddr_len, 16)
         ftp.client.pasv_sockfd = sceNetAccept(ftp.client.data_sockfd, ftp.client.pasv_sockaddr,
             ftp.client.pasv_sockaddr_len)
     end
@@ -270,7 +269,7 @@ function ftp_send_data_msg(str)
 end
 
 function ftp_send_ctrl_msg(str)
-    return sceNetSend(ftp.client.ctrl_sockfd, str, #str, 0)
+    sceNetSend(ftp.client.ctrl_sockfd, str, #str, 0)
 end
 
 function ftp_send_welcome()
@@ -376,7 +375,7 @@ function ftp_send_list()
         return
     end
 
-    ftp_send_ctrl_msg(string.format("150 Opening ASCII mode data transfer for LIST :: %s\r\n", ftp.client.cur_path))
+    ftp_send_ctrl_msg("150 Opening ASCII mode data transfer for LIST.\r\n")
     ftp_open_data_conn()
 
     local entry = contents
@@ -394,20 +393,16 @@ function ftp_send_list()
         end
         local file_mode = read_u16(file_st + 8)
         local file_size = memory.read_qword(file_st + 72):tonumber()
+        if S_ISLNK(file_mode) then break end
 
-        if not S_ISLNK(file_mode) then
-            ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d Dec 10 12:34 %s\r\n", list_args(file_mode), file_size, name))
-        end
+        ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d Dec 10 12:34 %s\r\n", list_args(file_mode), file_size, name))
         -- free(file_st)
         entry = entry + len
     end
-
-    -- free(contents)
-    -- free(st)
-    ftp_close_data_conn()
-    ftp_send_ctrl_msg("226 Transfer complete.\r\n")
-
     sceClose(fd)
+
+    ftp_close_data_conn()
+    ftp_send_ctrl_msg("226 Transfer complete\r\n")
 end
 
 function ftp_send_type(cmd)
@@ -428,17 +423,26 @@ function ftp_send_pasv()
     a, b, c, d = tonumber(a), tonumber(b), tonumber(c), tonumber(d)
     ftp.client.data_sockfd = sceNetSocket(AF_INET, SOCK_STREAM, 0)
 
+    local ip_bin_str = string.format("%d.%d.%d.%d", a, b, c, d)
+    local ip_bin = sceNetInetPton(ip_bin_str)
+
     memory.write_byte(ftp.client.data_sockaddr + 1, AF_INET)
-    memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(ftp.client.pasv_port))
-    memory.write_dword(ftp.client.data_sockaddr + 4, sceNetHtonl(INADDR_ANY))
+    memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(0))
+    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin)
 
     sceNetBind(ftp.client.data_sockfd, ftp.client.data_sockaddr, 16)
 
     sceNetListen(ftp.client.data_sockfd, 128)
 
-    local pasv_port_high = math.floor(ftp.client.pasv_port / 256);
-    local pasv_port_low = ftp.client.pasv_port % 256;
-    local cmd = string.format("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n", a, b, c, d, pasv_port_high, pasv_port_low)
+    local picked = bump.alloc(16)
+    local namelen = bump.alloc(8)
+    memory.write_byte(namelen, 16)
+    sceNetGetsockname(ftp.client.data_sockfd, picked, namelen)
+
+    local port = read_u16(picked + 2)
+    sceKernelSendNotificationRequest("Port: " .. port)
+
+    local cmd = string.format("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n", a, b, c, d, bit32.bor(bit32.rshift(port, 0), 0xFF), bit32.bor(bit32.rshift(port, 8), 0xFF))
     ftp_send_ctrl_msg(cmd)
     ftp.client.conn_type = conn_types.passive
 end
@@ -502,8 +506,8 @@ function ftp_send_port(cmd)
     memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(data_port))
     memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin) -- Hardcoded IP (for now.)
 
-    ftp.client.conn_type = conn_types.active
     ftp_send_ctrl_msg("200 PORT command ok\r\n")
+    ftp.client.conn_type = conn_types.active
 end
 
 function ftp_send_syst()
@@ -553,6 +557,12 @@ function ftp_send_file(path)
     else
         ftp_send_ctrl_msg("550 File not found\r\n")
     end
+end
+
+function ftp_send_retr(cmd)
+    local path = cmd:match("^RETR (.+)")
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    ftp_send_file(dir)
 end
 
 function ftp_send_mkd(cmd)
@@ -675,10 +685,6 @@ function ftp_client_th()
             ftp_send_rnfr(cmd)
         elseif cmd:match("^RNTO (.+)") then
             ftp_send_rnto(cmd)
-        --elseif cmd:match("^RETR") then
-        --    ftp_send_file("/app0/sce_module/libc.prx")
-        --elseif cmd:match("^STOR") then
-        --    ftp_send_file("/app0/sce_module/libc.prx")
         elseif cmd:match("^QUIT") then
             ftp_send_ctrl_msg("221 Goodbye\r\n")
             break
