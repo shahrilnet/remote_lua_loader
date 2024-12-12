@@ -464,12 +464,10 @@ function ftp_send_cwd(cmd)
         ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
     elseif new_path == ".." then
         ftp.client.cur_path = dir_up(ftp.client.cur_path)
-        if ftp.client.cur_path == "/" then
-            ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
-        else
+        if ftp.client.cur_path ~= "/" then
             ftp.client.cur_path = "/"
-            ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
         end
+        ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
     else
         local tmp_path
         if new_path:sub(1, 1) == "/" then
