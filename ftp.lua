@@ -14,7 +14,7 @@
 -- fix bugs, connection, slowness etc..
 -- add commands:
 
--- critical commands: DELE, STOR, RETR, RNFR, RNTO, REST, SIZE
+-- critical commands: DELE, STOR, RETR, RNFR, RNTO, REST
 -- important commands: NLST, MLSD
 -- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
 
@@ -27,14 +27,15 @@ conn_types = {
 
 ftp = {
     server = {
-        ip = "127.0.0.1", -- change this to match your ps4 / ps5's ip. use comma, and not dots.
+        ip = "127.0.0.1", -- change this to match your ps4 / ps5's ip.
         port = 1337,      -- ftp port.
 
         -- -- -- --
         server_sockfd = nil,
         server_sockaddr = bump.alloc(16),
         
-        default_file_buf = 0x200
+        default_file_buf = 0x200,
+        rname = ""
     },
     client = {
         ctrl_sockfd = nil,
@@ -214,6 +215,10 @@ function sceRmdir(path)
     return syscall.rmdir(path):tonumber()
 end
 
+function sceRename(old, new)
+    return syscall.rename(old, new):tonumber()
+end
+
 function sceNetInetPton(addr)
     local a, b, c, d = addr:match("(%d+)%.(%d+)%.(%d+)%.(%d+)")
     a, b, c, d = tonumber(a), tonumber(b), tonumber(c), tonumber(d)
@@ -224,14 +229,7 @@ function sceNetInetPton(addr)
     local f3 = bit32.band(bit32.lshift(ip_binary, 24), 0xFF000000)
     return bit32.bor(f0, f1, f2, f3)
 end
-
 -- sce wrapper functions ![end]
-
--- helper funcs ![begin]
-function gen_ftp_fullpath(p)
-    return string.format("%s/%s", ftp.client.cur_path, p)
-end
--- helper funcs ![end]
 
 function ftp_open_data_conn()
     if ftp.client.conn_type == conn_types.active then
@@ -330,6 +328,19 @@ function list_args(mode)
     f = f .. (bit32.band(mode, tonumber("0002", 8)) > 0 and "w" or "-")
     f = f .. (bit32.band(mode, tonumber("0001", 8)) > 0 and (S_ISDIR(mode) and "s" or "x") or (S_ISDIR(mode) and "S" or "-"))
     return f
+end
+
+function ftp_send_size(cmd)
+    local path = cmd:match("^SIZE (.+)")
+
+    local st = bump.alloc(120)
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    if sceStat(dir, st) < 0 then
+        ftp_send_ctrl_msg("550 The file doesn't exist\r\n")
+        return
+    end
+    local file_size = memory.read_qword(st + 72):tonumber()
+    ftp_send_ctrl_msg(string.format("213 %d\r\n", file_size))
 end
 
 function ftp_send_list()
@@ -608,10 +619,12 @@ function ftp_client_th()
             ftp_send_mkd(cmd)
         elseif cmd:match("^RMD (.+)") then
             ftp_send_rmd(cmd)
-        elseif cmd:match("^RETR") then
-            ftp_send_file("/app0/sce_module/libc.prx")
-        elseif cmd:match("^STOR") then
-            ftp_send_file("/app0/sce_module/libc.prx")
+        elseif cmd:match("^SIZE (.+)") then
+            ftp_send_size(cmd)
+        --elseif cmd:match("^RETR") then
+        --    ftp_send_file("/app0/sce_module/libc.prx")
+        --elseif cmd:match("^STOR") then
+        --    ftp_send_file("/app0/sce_module/libc.prx")
         elseif cmd:match("^QUIT") then
             ftp_send_ctrl_msg("221 Goodbye\r\n")
             break
@@ -679,6 +692,7 @@ function main()
         access = 33,
         readlink = 58,
         connect = 98,
+        rename = 128,
         sendto = 133, -- send.
         mkdir = 136,
         rmdir = 137,
