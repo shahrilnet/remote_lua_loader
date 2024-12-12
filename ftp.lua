@@ -444,7 +444,7 @@ function ftp_send_pasv()
     sceNetGetsockname(ftp.client.data_sockfd, picked, namelen)
 
     local port = read_u16(picked + 2)
-    sceKernelSendNotificationRequest("Port: " .. port)
+    --sceKernelSendNotificationRequest("Port: " .. port)
 
     local cmd = string.format("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n", a, b, c, d, bit32.bor(bit32.rshift(port, 0), 0xFF), bit32.bor(bit32.rshift(port, 8), 0xFF))
     ftp_send_ctrl_msg(cmd)
@@ -459,7 +459,7 @@ function ftp_send_cwd(cmd)
         return
     end
 
-    sceKernelSendNotificationRequest("Request Dir: " .. cmd)
+    --sceKernelSendNotificationRequest("Request Dir: " .. cmd)
 
     if new_path == "/" then
         ftp.client.cur_path = "/"
