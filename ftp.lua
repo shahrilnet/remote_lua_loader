@@ -15,7 +15,7 @@
 -- add commands:
 
 -- critical commands: DELE, STOR, RETR, RNFR, RNTO, REST, SIZE
--- important commands: MKD, RMD, NLST, MLSD
+-- important commands: NLST, MLSD
 -- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
 
 -- @horror.
@@ -27,7 +27,7 @@ conn_types = {
 
 ftp = {
     server = {
-        ip = "127.0.0.1", -- change this to match your ps4 / ps5's ip.
+        ip = "127.0.0.1", -- change this to match your ps4 / ps5's ip. use comma, and not dots.
         port = 1337,      -- ftp port.
 
         -- -- -- --
@@ -206,6 +206,14 @@ function sceClose(sck)
     return syscall.close(sck):tonumber()
 end
 
+function sceMkdir(path, mode)
+    return syscall.mkdir(path, mode):tonumber()
+end
+
+function sceRmdir(path)
+    return syscall.rmdir(path):tonumber()
+end
+
 function sceNetInetPton(addr)
     local a, b, c, d = addr:match("(%d+)%.(%d+)%.(%d+)%.(%d+)")
     a, b, c, d = tonumber(a), tonumber(b), tonumber(c), tonumber(d)
@@ -324,7 +332,6 @@ function list_args(mode)
     return f
 end
 
-
 function ftp_send_list()
     local st = bump.alloc(120)
 
@@ -368,9 +375,12 @@ function ftp_send_list()
         if not S_ISLNK(file_mode) then
             ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d Dec 10 12:34 %s\r\n", list_args(file_mode), file_size, name))
         end
+        -- free(file_st)
         entry = entry + len
     end
 
+    -- free(contents)
+    -- free(st)
     ftp_close_data_conn()
     ftp_send_ctrl_msg("226 Transfer complete.\r\n")
 
@@ -522,6 +532,43 @@ function ftp_send_file(path)
     end
 end
 
+function ftp_send_mkd(cmd)
+    local path = cmd:match("^MKD (.+)")
+
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local fd = sceOpen(dir, 0, 0)
+    if fd >= 0 then
+        ftp_send_ctrl_msg("550 Requested action not taken. Folder already exists.\r\n")
+    else
+        if sceMkdir(dir, tonumber("0755", 8)) < 0 then
+            ftp_send_ctrl_msg("501 Syntax error. Not privileged.\r\n")
+        else
+            ftp_send_ctrl_msg(string.format("257 \"%s\" created.\r\n", path))
+        end
+    end
+
+    if fd > 0 then
+        sceClose(fd)
+    end
+end
+
+function ftp_send_rmd(cmd)
+    local path = cmd:match("^RMD (.+)")
+
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local fd = sceOpen(dir, 0, 0)
+    if fd >= 0 then
+        sceClose(fd)
+        if sceRmdir(dir) < 0 then
+            ftp_send_ctrl_msg("550 Directory not found or permission denied\r\n")
+        else
+            ftp_send_ctrl_msg(string.format("250 \"%s\" has been removed\r\n", path))
+        end
+    else
+        ftp_send_ctrl_msg("500 Directory doesn't exist\r\n")
+    end
+end
+
 function ftp_client_th()
     local recv_buffer = bump.alloc(512)
     local recv_len = nil
@@ -557,11 +604,14 @@ function ftp_client_th()
             ftp_send_syst()
         elseif cmd:match("^FEAT") then
             ftp_send_feat()
+        elseif cmd:match("^MKD (.+)") then
+            ftp_send_mkd(cmd)
+        elseif cmd:match("^RMD (.+)") then
+            ftp_send_rmd(cmd)
         elseif cmd:match("^RETR") then
             ftp_send_file("/app0/sce_module/libc.prx")
         elseif cmd:match("^STOR") then
             ftp_send_file("/app0/sce_module/libc.prx")
-
         elseif cmd:match("^QUIT") then
             ftp_send_ctrl_msg("221 Goodbye\r\n")
             break
