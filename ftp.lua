@@ -24,7 +24,7 @@ conn_types = {
 
 ftp = {
     server = {
-        ip = "127.0.0.1", -- change this to match your ps4 / ps5's ip.
+        ip = "127.0.0.1",
         port = 1337,      -- ftp port.
 
         -- -- -- --
