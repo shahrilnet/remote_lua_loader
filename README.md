@@ -63,5 +63,6 @@ If you have a jailbroken PS5 with a non activated account, you can use OffAct fr
 * null_ptr - for testing & ideas
 * gezine - for sharing the vulnerable games & ideas
 * specter & chendo - for webkit implementations which i refer a lot
+* al-azif - parts and information grabbed from his sdk, aswell as from his ftp server
 * everyone else who shared their knowledge with the community
 
