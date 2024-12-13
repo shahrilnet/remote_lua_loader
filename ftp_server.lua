@@ -9,13 +9,9 @@
 -- transferring files can shutdown the connection to user.
 
 -- to do!
--- fix bugs, connection, slowness etc..
 -- add commands:
-
 -- critical commands: STOR, REST
 -- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
-
--- working but needs tweaking: RETR
 
 -- @horror.
 conn_types = {
@@ -579,7 +575,7 @@ function ftp_send_port()
     
     memory.write_byte(ftp.client.data_sockaddr + 1, AF_INET)
     memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(data_port))
-    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin) -- Hardcoded IP (for now.)
+    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin)
 
     ftp_send_ctrl_msg("200 PORT command ok\r\n")
     ftp.client.conn_type = conn_types.active
