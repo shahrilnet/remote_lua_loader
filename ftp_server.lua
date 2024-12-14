@@ -18,6 +18,7 @@
 -- working but needs tweaking: RETR
 
 -- @horror.
+FTP_DEBUG_MSG = "on"
 conn_types = {
     none = 0x0,
     active = 0x1,
@@ -157,6 +158,12 @@ function sceKernelSendNotificationRequest(text)
     syscall.write(notification_fd, notify_buffer, notify_buffer_size)
 
     syscall.close(notification_fd)
+end
+
+function sceKernelSendDebug(text)
+    if FTP_DEBUG_MSG == "on" then
+        sceKernelSendNotificationRequest(text)
+    end
 end
 
 -- custom reads. for any that has the sizeof 4 bytes, use memory.read_dword instead.
@@ -680,8 +687,9 @@ end
 
 function ftp_send_rmd()
     local path = ftp.client.cur_cmd:match("^RMD (.+)")
-
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
+
+    sceKernelSendDebug("Requested (DELETE_DIR): " .. dir)
     local fd = sceOpen(dir, 0, 0)
     if fd >= 0 then
         sceClose(fd)
@@ -699,6 +707,7 @@ function ftp_send_dele()
     local path = ftp.client.cur_cmd:match("^DELE (.+)")
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
+    sceKernelSendDebug("Requested (DELETE): " .. dir)
     if sceUnlink(dir) < 0 then
         ftp_send_ctrl_msg("550 Could not delete the file\r\n")
     else
@@ -710,6 +719,7 @@ function ftp_send_rnfr()
     local path = ftp.client.cur_cmd:match("^RNFR (.+)")
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
+    sceKernelSendDebug("Requested (RENAME): " .. dir)
     if sceFileExists(dir) then
         ftp.server.rname = path
         ftp_send_ctrl_msg("350 Remembered filename\r\n")
@@ -723,6 +733,7 @@ function ftp_send_rnto()
     local dir_old = string.format("%s/%s", ftp.client.cur_path, ftp.server.rname)
     local dir_new = string.format("%s/%s", ftp.client.cur_path, path)
 
+    sceKernelSendDebug("Requested (RENAME): \n" .. dir_old .. "\n" .. dir_new)
     if sceRename(dir_old, dir_new) < 0 then
         ftp_send_ctrl_msg("550 Error renaming file\r\n")
         return
@@ -796,7 +807,7 @@ local command_handlers = {
 }
 
 local function default_handler()
-    sceKernelSendNotificationRequest("Requested: " .. ftp.client.cur_cmd .. ", But it's not implemented.")
+    sceKernelSendDebug("Requested: " .. ftp.client.cur_cmd .. ", But it's not implemented.")
 end
 
 local function cleanup_ftp()
@@ -804,7 +815,7 @@ local function cleanup_ftp()
     if ftp.client.data_sockfd then sceClose(ftp.client.data_sockfd) end
     if ftp.client.pasv_sockfd then sceClose(ftp.client.pasv_sockfd) end
     if ftp.server.server_sockfd then sceClose(ftp.server.server_sockfd) end
-    --sceKernelSendNotificationRequest("FTP Server closed")
+    sceKernelSendNotificationRequest("FTP Server closed")
 end
 
 function ftp_client_th()
