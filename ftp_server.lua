@@ -9,9 +9,13 @@
 -- transferring files can shutdown the connection to user.
 
 -- to do!
+-- fix bugs, connection, slowness etc..
 -- add commands:
+
 -- critical commands: STOR, REST
 -- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
+
+-- working but needs tweaking: RETR
 
 -- @horror.
 conn_types = {
@@ -390,7 +394,7 @@ function list_args(mode)
     return f
 end
 
-function ftp_send_size(cmd)
+function ftp_send_size()
     local path = ftp.client.cur_cmd:match("^SIZE (.+)")
 
     local st = memory.alloc(120)
@@ -575,7 +579,7 @@ function ftp_send_port()
     
     memory.write_byte(ftp.client.data_sockaddr + 1, AF_INET)
     memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(data_port))
-    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin)
+    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin) -- Hardcoded IP (for now.)
 
     ftp_send_ctrl_msg("200 PORT command ok\r\n")
     ftp.client.conn_type = conn_types.active
@@ -692,7 +696,7 @@ function ftp_send_rmd()
 end
 
 function ftp_send_dele()
-    local path = ftp.client.cur_cmd:match("^RMD (.+)")
+    local path = ftp.client.cur_cmd:match("^DELE (.+)")
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
     if sceUnlink(dir) < 0 then
@@ -764,14 +768,26 @@ local command_handlers = {
     FEAT = function()
         ftp_send_feat()
     end,
-    RETR = function()
-        ftp_send_retr()
+    MKD = function()
+        ftp_send_mkd()
     end,
-    STOR = function()
-        ftp_send_stor()
+    RMD = function()
+        ftp_send_rmd()
+    end,
+    SIZE = function()
+        ftp_send_size()
+    end,
+    DELE = function()
+        ftp_send_dele()
     end,
     RNFR = function()
         ftp_send_rnfr()
+    end,
+    RNTO = function()
+        ftp_send_rnto()
+    end,
+    RETR = function()
+        ftp_send_retr()
     end,
     QUIT = function() 
         ftp_send_ctrl_msg("221 Goodbye\r\n") 
