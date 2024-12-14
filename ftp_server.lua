@@ -710,8 +710,10 @@ function ftp_send_dele()
     sceKernelSendDebug("Requested (DELETE): " .. dir)
     if sceUnlink(dir) < 0 then
         ftp_send_ctrl_msg("550 Could not delete the file\r\n")
+        sceKernelSendDebug("Requested (DELETE) [FAIL]: " .. dir)
     else
         ftp_send_ctrl_msg("226 File deleted\r\n")
+        sceKernelSendDebug("Requested (DELETE) [OK]: " .. dir)
     end
 end
 
