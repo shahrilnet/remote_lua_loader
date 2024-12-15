@@ -249,6 +249,10 @@ function sceRead(fd, buf, len)
     return syscall.read(fd, buf, len):tonumber()
 end
 
+function sceWrite(fd, buf, len)
+    return syscall.write(fd, buf, len):tonumber()
+end
+
 function sceLseek(fd, offset, whence)
     return syscall.lseek(fd, offset, whence):tonumber()
 end
@@ -460,7 +464,7 @@ function ftp_send_list()
         end
         local file_mode = read_u16(st + 8)
         local file_size = memory.read_qword(st + 72):tonumber()
-        if S_ISLNK(file_mode) then break end
+        --if S_ISLNK(file_mode) then break end
 
         local tm = memory.alloc(36)
         gmtime_s(st + 56, tm)
@@ -603,6 +607,7 @@ function ftp_send_feat()
 end
 
 function ftp_send_cdup()
+    if not ftp.client.cur_path then ftp.client.cur_path = "/" end
     if ftp.client.cur_path == "/" then
         ftp_send_ctrl_msg("200 Command okay\r\n")
         return
@@ -616,6 +621,14 @@ function ftp_send_data_raw(buf, len)
         sceNetSend(ftp.client.data_sockfd, buf, len, 0)
     else
         sceNetSend(ftp.client.pasv_sockfd, buf, len, 0)
+    end
+end
+
+function ftp_recv_data_raw(buf, len)
+    if ftp.client.conn_type == conn_types.active then
+        return sceNetRecv(ftp.client.data_sockfd, buf, len, 0)
+    else
+        return sceNetRecv(ftp.client.pasv_sockfd, buf, len, 0)
     end
 end
 
@@ -654,21 +667,74 @@ function ftp_send_file(path)
     end
 end
 
+function ftp_recv_file(path)
+    O_CREATE = 0x0200
+    O_RDWR = 0x0002
+    O_APPEND = 0x0008
+    O_TRUNC = 0x0400
+
+    local mode = bit32.bor(O_CREATE, O_RDWR)
+
+    if ftp.client.restore_point then
+        mode = bit32.bor(mode, O_APPEND)
+    else
+        mode = bit32.bor(mode, O_TRUNC)
+    end
+
+    local fd = sceOpen(path, mode, tonumber("0777", 8))
+    if fd >= 0 then
+        ftp_open_data_conn()
+        ftp_send_ctrl_msg("150 Opening Image mode data transfer\r\n")
+
+        local chunk_size = 8192
+        local buffer = memory.alloc(chunk_size)
+
+        while true do
+            local n_recv = ftp_recv_data_raw(buffer, chunk_size)
+            if n_recv <= 0 then break end 
+
+            local n_written = sceWrite(fd, buffer, n_recv)
+            if n_written < n_recv then
+                ftp_send_ctrl_msg("550 File write error\r\n")
+                break
+            end
+        end
+
+        ftp_send_ctrl_msg("226 Transfer completed\r\n")
+        ftp_close_data_conn()
+        sceClose(fd)
+        return
+    end
+
+    ftp_send_ctrl_msg("500 Error opening file\r\n")
+end
+
+
 function ftp_send_retr()
     local path = ftp.client.cur_cmd:match("^RETR (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
     ftp_send_file(dir)
 end
 
 function ftp_send_stor()
     local path = ftp.client.cur_cmd:match("^STOR (.+)")
-    sceKernelSendNotificationRequest("STOR: " .. path)
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    ftp_recv_file(dir)
 end
 
 function ftp_send_mkd()
     local path = ftp.client.cur_cmd:match("^MKD (.+)")
-
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
+
     local fd = sceOpen(dir, 0, 0)
     if fd >= 0 then
         ftp_send_ctrl_msg("550 Requested action not taken. Folder already exists.\r\n")
@@ -687,6 +753,9 @@ end
 
 function ftp_send_rmd()
     local path = ftp.client.cur_cmd:match("^RMD (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (DELETE_DIR): " .. dir)
@@ -705,6 +774,9 @@ end
 
 function ftp_send_dele()
     local path = ftp.client.cur_cmd:match("^DELE (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (DELETE): " .. dir)
@@ -719,6 +791,9 @@ end
 
 function ftp_send_rnfr()
     local path = ftp.client.cur_cmd:match("^RNFR (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir = string.format("%s/%s", ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (RENAME): " .. dir)
@@ -732,6 +807,9 @@ end
 
 function ftp_send_rnto()
     local path = ftp.client.cur_cmd:match("^RNTO (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
     local dir_old = string.format("%s/%s", ftp.client.cur_path, ftp.server.rname)
     local dir_new = string.format("%s/%s", ftp.client.cur_path, path)
 
@@ -802,6 +880,9 @@ local command_handlers = {
     RETR = function()
         ftp_send_retr()
     end,
+    STOR = function()
+        ftp_send_stor()
+    end,
     QUIT = function() 
         ftp_send_ctrl_msg("221 Goodbye\r\n") 
         return true -- break signal
@@ -809,6 +890,7 @@ local command_handlers = {
 }
 
 local function default_handler()
+    ftp_send_ctrl_msg("500 Syntax error, command unrecognized.\r\n")
     sceKernelSendDebug("Requested: " .. ftp.client.cur_cmd .. ", But it's not implemented.")
 end
 
