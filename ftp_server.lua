@@ -5,17 +5,7 @@
 -- In General tab, set encryption to "Only use plain FTP (insecure)". We don't have TLS, yet.
 
 -- known issues:
--- entering a directory MAY (not always) shutdown the connection to user.
--- transferring files can shutdown the connection to user.
-
--- to do!
--- fix bugs, connection, slowness etc..
--- add commands:
-
--- critical commands: STOR, REST
--- @ https://en.wikipedia.org/wiki/List_of_FTP_commands
-
--- working but needs tweaking: RETR
+-- transferring a large file may crash the application.
 
 -- @horror.
 FTP_DEBUG_MSG = "on"

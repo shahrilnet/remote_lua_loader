@@ -15,7 +15,7 @@ And the payloads:
 3. notification_popup.lua - Triggers a notification popup with 'Hello World' on the PlayStation.
 4. sigbus_crash_trigger.lua - Triggers a SIGBUS crash that should be signal handled without crashing the game process.
 5. streaming_output.lua - Prints basic information and trigger two SIGSEGV crashes in the middle, to demonstrate how streaming real-time output works.
-6. ftp_server.lua - Runs an FTP server on port 1337 that allows browsing the filesystem as seen by the game process (e.g. limited filesystem). Download/upload files not working yet.
+6. ftp_server.lua - Runs an FTP server on port 1337 that allows browsing the filesystem as seen by the game process (e.g. limited filesystem).
 
 ### Usage on jailbroken PS4 with disc version
 
