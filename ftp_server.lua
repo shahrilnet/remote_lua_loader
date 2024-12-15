@@ -728,6 +728,16 @@ function ftp_send_stor()
     ftp_recv_file(dir)
 end
 
+function ftp_send_appe()
+    local path = ftp.client.cur_cmd:match("^STOR (.+)")
+    if path:match(".*/") then
+        path = path:match(".*/(.*)")
+    end
+    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    ftp.client.restore_point = -1
+    ftp_recv_file(dir)
+end
+
 function ftp_send_mkd()
     local path = ftp.client.cur_cmd:match("^MKD (.+)")
     if path:match(".*/") then
@@ -882,6 +892,9 @@ local command_handlers = {
     end,
     STOR = function()
         ftp_send_stor()
+    end,
+    APPE = function()
+        ftp_send_appe()
     end,
     QUIT = function() 
         ftp_send_ctrl_msg("221 Goodbye\r\n") 
