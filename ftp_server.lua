@@ -340,6 +340,13 @@ function ftp_send_welcome()
     ftp_send_ctrl_msg("220 RLL FTP Server\r\n")
 end
 
+function sanitize_path(from, to)
+    if from:match(".*/") then
+        from = from:match(".*/(.*)")
+    end
+    return string.format("%s/%s", ftp.client.cur_path, to)
+end
+
 function ftp_file_type_char(mode)
     if S_ISBLK(mode) then
         return 'b'
@@ -712,38 +719,32 @@ end
 
 function ftp_send_retr()
     local path = ftp.client.cur_cmd:match("^RETR (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
     ftp_send_file(dir)
 end
 
 function ftp_send_stor()
     local path = ftp.client.cur_cmd:match("^STOR (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
     ftp_recv_file(dir)
 end
 
 function ftp_send_appe()
     local path = ftp.client.cur_cmd:match("^STOR (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
     ftp.client.restore_point = -1
     ftp_recv_file(dir)
 end
 
+function ftp_send_rest()
+    local rest = ftp.client.cur_cmd:match("^REST (%d+)%")
+    ftp.client.restore_point = rest:tonumber()
+    ftp_send_ctrl_msg("350 Resuming at %d\r\n", rest:tonumber())
+end
+
 function ftp_send_mkd()
     local path = ftp.client.cur_cmd:match("^MKD (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
 
     local fd = sceOpen(dir, 0, 0)
     if fd >= 0 then
@@ -763,10 +764,7 @@ end
 
 function ftp_send_rmd()
     local path = ftp.client.cur_cmd:match("^RMD (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (DELETE_DIR): " .. dir)
     local fd = sceOpen(dir, 0, 0)
@@ -801,10 +799,7 @@ end
 
 function ftp_send_rnfr()
     local path = ftp.client.cur_cmd:match("^RNFR (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (RENAME): " .. dir)
     if sceFileExists(dir) then
@@ -817,11 +812,8 @@ end
 
 function ftp_send_rnto()
     local path = ftp.client.cur_cmd:match("^RNTO (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir_old = string.format("%s/%s", ftp.client.cur_path, ftp.server.rname)
-    local dir_new = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir_old = sanitize_path(ftp.client.cur_path, ftp.server.rname)
+    local dir_new = sanitize_path(ftp.client.cur_path, path)
 
     sceKernelSendDebug("Requested (RENAME): \n" .. dir_old .. "\n" .. dir_new)
     if sceRename(dir_old, dir_new) < 0 then
@@ -896,10 +888,13 @@ local command_handlers = {
     APPE = function()
         ftp_send_appe()
     end,
+    REST = function()
+        ftp_send_rest()
+    end,
     QUIT = function() 
         ftp_send_ctrl_msg("221 Goodbye\r\n") 
         return true -- break signal
-    end,
+    end
 }
 
 local function default_handler()
