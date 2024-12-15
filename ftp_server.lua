@@ -737,9 +737,9 @@ function ftp_send_appe()
 end
 
 function ftp_send_rest()
-    local rest = ftp.client.cur_cmd:match("^REST (%d+)%")
-    ftp.client.restore_point = rest:tonumber()
-    ftp_send_ctrl_msg("350 Resuming at %d\r\n", rest:tonumber())
+    local rest = ftp.client.cur_cmd:match("^REST (%d+)")
+    ftp.client.restore_point = rest
+    ftp_send_ctrl_msg(string.format("350 Resuming at %d\r\n", rest))
 end
 
 function ftp_send_mkd()
