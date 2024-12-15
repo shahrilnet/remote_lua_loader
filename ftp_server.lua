@@ -614,7 +614,7 @@ function ftp_send_feat()
 end
 
 function ftp_send_cdup()
-    if not ftp.client.cur_path then ftp.client.cur_path = "/" end
+    if not ftp.client.cur_path or ftp.client.cur_path == "" then ftp.client.cur_path = "/" end
     if ftp.client.cur_path == "/" then
         ftp_send_ctrl_msg("200 Command okay\r\n")
         return
