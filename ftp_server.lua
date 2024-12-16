@@ -8,7 +8,7 @@
 -- transferring a large file may crash the application.
 
 -- @horror.
-FTP_DEBUG_MSG = "off"
+FTP_DEBUG_MSG = "on"
 conn_types = {
     none = 0x0,
     active = 0x1,
@@ -17,7 +17,7 @@ conn_types = {
 
 ftp = {
     server = {
-        ip = "127.0.0.1",
+        ip = "192.168.50.223",
         port = 1337,      -- ftp port.
 
         -- -- -- --
@@ -289,8 +289,8 @@ function sceUnlink(path)
     return syscall.unlink(path):tonumber()
 end
 
-function sceSocketClose(sck)
-    return syscall.socketclose(sck):tonumber()
+function sceChmod(path, mode)
+    return syscall.chmod(path, mode):tonumber()
 end
 
 function sceFileExists(path)
@@ -349,32 +349,10 @@ function ftp_send_welcome()
 end
 
 function sanitize_path(from, to)
-    if from:match(".*/") then
-        from = from:match(".*/(.*)")
+    if to:match(".*/") then
+        to = to:match(".*/(.*)")
     end
-    return string.format("%s/%s", ftp.client.cur_path, to)
-end
-
-function ftp_file_type_char(mode)
-    if S_ISBLK(mode) then
-        return 'b'
-    elseif S_ISCHR(mode) then
-        return 'c'
-    elseif S_ISREG(mode) then
-        return '-'
-    elseif S_ISDIR(mode) then
-        return 'd'
-    elseif S_ISFIFO(mode) then
-        return 'p'
-    elseif S_ISSOCK(mode) then
-        return 's'
-    elseif S_ISLNK(mode) then
-        return 'l'
-    elseif S_ISWHT(mode) then
-        return 'w'
-    else
-        return ' '
-    end
+    return string.format("%s/%s", from, to)
 end
 
 function dir_up(path)
@@ -386,23 +364,24 @@ function dir_up(path)
 end
 
 function file_type_char(mode)
-    if S_ISBLK(mode) then
-        return "b"
-    elseif S_ISCHR(mode) then
-        return "c"
-    elseif S_ISREG(mode) then
-        return "-"
-    elseif S_ISDIR(mode) then
-        return "d"
-    elseif S_ISFIFO(mode) then
-        return "p"
-    elseif S_ISSOCK(mode) then
-        return "s"
-    elseif S_ISLNK(mode) then
-        return "l"
-    else
-        return " "
+    local type_map = {
+        [S_ISBLK] = 'b',   -- Block device
+        [S_ISCHR] = 'c',   -- Character device
+        [S_ISREG] = '-',   -- Regular file
+        [S_ISDIR] = 'd',   -- Directory
+        [S_ISFIFO] = 'p',  -- FIFO/pipe
+        [S_ISSOCK] = 's',  -- Socket
+        [S_ISLNK] = 'l',   -- Symbolic link
+        [S_ISWHT] = 'w'    -- Whiteout
+    }
+
+    for check_func, character in pairs(type_map) do
+        if check_func(mode) then
+            return character
+        end
     end
+
+    return ' '
 end
 
 function list_args(mode)
@@ -421,10 +400,8 @@ function list_args(mode)
 end
 
 function ftp_send_size()
-    local path = ftp.client.cur_cmd:match("^SIZE (.+)")
-
     local st = memory.alloc(120)
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = ftp.client.cur_path
     if sceStat(dir, st) < 0 then
         ftp_send_ctrl_msg("550 The file doesn't exist\r\n")
         return
@@ -466,33 +443,35 @@ function ftp_send_list()
 
     local entry = contents
     while true do
-        local len = read_u8(entry + 0x4)
-        if len == 0 then
-            break
-        end
+        local length = read_u8(entry + 0x4)
+        if length == 0 then break end
         local name = memory.read_buffer(entry + 0x8, 64)
-        if name == '\0' then break end
-        if #name <= 2 then break end
-        --local file_st = memory.alloc(120)
-        if sceStat(ftp.client.cur_path .. "/" .. name, st) < 0 then
-            break
+        if name ~= '.' and name ~= '..' and name ~= '\0' then
+            local full_path = ftp.client.cur_path .. "/" .. name
+            if sceStat(full_path, st) >= 0 then
+                local file_mode = read_u16(st + 8)
+                local file_size = memory.read_qword(st + 72):tonumber()
+                
+                local tm = memory.alloc(36)
+                gmtime_s(st + 56, tm)
+                local n_hour = memory.read_dword(tm + 8)
+                local n_mins = memory.read_dword(tm + 4)
+                local n_mday = memory.read_dword(tm + 12)
+                local n_mon = memory.read_dword(tm + 16)
+                
+                -- mon + 1 because arrays starts at index 1 in lua.
+                ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d %s %d %02d:%02d %s\r\n", 
+                    list_args(file_mode), 
+                    file_size, 
+                    months[n_mon:tonumber()+1], 
+                    n_mday:tonumber(), 
+                    n_hour:tonumber(), 
+                    n_mins:tonumber(), 
+                    name))
+            end
         end
-        local file_mode = read_u16(st + 8)
-        local file_size = memory.read_qword(st + 72):tonumber()
-        --if S_ISLNK(file_mode) then break end
-
-        local tm = memory.alloc(36)
-        gmtime_s(st + 56, tm)
-
-        local n_hour = memory.read_dword(tm + 8)
-        local n_mins = memory.read_dword(tm + 4)
-        local n_mday = memory.read_dword(tm + 12)
-        local n_mon = memory.read_dword(tm + 16)
-
-        -- mon + 1 because arrays starts at index 1 in lua.
-        ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d %s %d %02d:%02d %s\r\n", list_args(file_mode), file_size, months[n_mon:tonumber()+1], n_mday:tonumber(), n_hour:tonumber(), n_mins:tonumber(), name))
-        -- free(file_st)
-        entry = entry + len
+        
+        entry = entry + length
     end
     sceClose(fd)
 
@@ -544,13 +523,12 @@ end
 
 function ftp_send_cwd()
     local new_path = ftp.client.cur_cmd:match("^CWD (.+)")
+    sceKernelSendDebug(ftp.client.cur_cmd)
 
     if not new_path then
         ftp_send_ctrl_msg("500 Syntax error, command unrecognized.\r\n")
         return
     end
-
-    --sceKernelSendNotificationRequest("Request Dir: " .. cmd)
 
     if new_path == "/" then
         ftp.client.cur_path = "/"
@@ -576,6 +554,7 @@ function ftp_send_cwd()
         if tmp_path ~= "/" then
             if sceOpen(tmp_path, 0, 0) < 0 then
                 ftp_send_ctrl_msg("550 Invalid directory.\r\n")
+                return
             end
         end
 
@@ -600,15 +579,14 @@ function ftp_send_port()
         return
     end
 
-    local ip_bin_str = string.format("%d.%d.%d.%d", ip1, ip2, ip3, ip4)
-    local ip_bin = sceNetInetPton(ip_bin_str)
+    local ip_bin = sceNetInetPton(string.format("%d.%d.%d.%d", ip1, ip2, ip3, ip4))
     
     memory.write_byte(ftp.client.data_sockaddr + 1, AF_INET)
     memory.write_word(ftp.client.data_sockaddr + 2, sceNetHtons(data_port))
-    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin) -- Hardcoded IP (for now.)
+    memory.write_dword(ftp.client.data_sockaddr + 4, ip_bin)
 
-    ftp_send_ctrl_msg("200 PORT command ok\r\n")
     ftp.client.conn_type = conn_types.active
+    ftp_send_ctrl_msg("200 PORT command ok\r\n")
 end
 
 function ftp_send_syst()
@@ -623,11 +601,9 @@ end
 
 function ftp_send_cdup()
     if not ftp.client.cur_path or ftp.client.cur_path == "" then ftp.client.cur_path = "/" end
-    if ftp.client.cur_path == "/" then
-        ftp_send_ctrl_msg("200 Command okay\r\n")
-        return
+    if ftp.client.cur_path ~= "/" then
+        ftp.client.cur_path = dir_up(ftp.client.cur_path)
     end
-    ftp.client.cur_path = dir_up(ftp.client.cur_path);
     ftp_send_ctrl_msg("200 Command okay\r\n")
 end
 
@@ -649,37 +625,38 @@ end
 
 function ftp_send_file(path)
     local fd = sceOpen(path, 0, 0)
-    if fd >= 0 then
-        sceLseek(fd, ftp.client.restore_point, 0)
-
-        local st = memory.alloc(120)
-
-        if sceStat(path, st) < 0 then
-            ftp_send_ctrl_msg("550 File not found\r\n")
-        else
-            local file_size = memory.read_qword(st + 72):tonumber()
-            local chunk_size = 8192 
-            local buffer = memory.alloc(chunk_size)
-            local bytes_sent = 0
-            ftp_open_data_conn()
-            ftp_send_ctrl_msg("150 Opening Image mode data transfer\r\n")
-
-            while bytes_sent < file_size do
-                local bytes_to_read = math.min(chunk_size, file_size - bytes_sent)
-                local n_recv = sceRead(fd, buffer, bytes_to_read)
-
-                if n_recv <= 0 then break end
-                ftp_send_data_raw(buffer, n_recv)
-                bytes_sent = bytes_sent + n_recv
-            end
-
-            sceClose(fd)
-            ftp_send_ctrl_msg("226 Transfer completed\r\n")
-            ftp_close_data_conn()
-        end
-    else
+    if fd < 0 then
         ftp_send_ctrl_msg("550 File not found\r\n")
+        return
     end
+    
+    sceLseek(fd, ftp.client.restore_point, 0)
+    local st = memory.alloc(120)
+
+    if sceStat(path, st) < 0 then
+        ftp_send_ctrl_msg("550 File not found\r\n")
+        return
+    end
+
+    local file_size = memory.read_qword(st + 72):tonumber()
+    local chunk_size = 8192 
+    local buffer = memory.alloc(chunk_size)
+    local bytes_sent = 0
+    ftp_open_data_conn()
+    ftp_send_ctrl_msg("150 Opening Image mode data transfer\r\n")
+
+    while bytes_sent < file_size do
+        local bytes_to_read = math.min(chunk_size, file_size - bytes_sent)
+        local n_recv = sceRead(fd, buffer, bytes_to_read)
+
+        if n_recv <= 0 then break end
+        ftp_send_data_raw(buffer, n_recv)
+        bytes_sent = bytes_sent + n_recv
+    end
+
+    sceClose(fd)
+    ftp_send_ctrl_msg("226 Transfer completed\r\n")
+    ftp_close_data_conn()
 end
 
 function ftp_recv_file(path)
@@ -697,31 +674,31 @@ function ftp_recv_file(path)
     end
 
     local fd = sceOpen(path, mode, tonumber("0777", 8))
-    if fd >= 0 then
-        ftp_open_data_conn()
-        ftp_send_ctrl_msg("150 Opening Image mode data transfer\r\n")
-
-        local chunk_size = 8192
-        local buffer = memory.alloc(chunk_size)
-
-        while true do
-            local n_recv = ftp_recv_data_raw(buffer, chunk_size)
-            if n_recv <= 0 then break end 
-
-            local n_written = sceWrite(fd, buffer, n_recv)
-            if n_written < n_recv then
-                ftp_send_ctrl_msg("550 File write error\r\n")
-                break
-            end
-        end
-
-        ftp_send_ctrl_msg("226 Transfer completed\r\n")
-        ftp_close_data_conn()
-        sceClose(fd)
+    if fd < 0 then
+        ftp_send_ctrl_msg("500 Error opening file\r\n")
         return
     end
+    
+    ftp_open_data_conn()
+    ftp_send_ctrl_msg("150 Opening Image mode data transfer\r\n")
 
-    ftp_send_ctrl_msg("500 Error opening file\r\n")
+    local chunk_size = 8192
+    local buffer = memory.alloc(chunk_size)
+
+    while true do
+        local n_recv = ftp_recv_data_raw(buffer, chunk_size)
+        if n_recv <= 0 then break end 
+
+        local n_written = sceWrite(fd, buffer, n_recv)
+        if n_written < n_recv then
+            ftp_send_ctrl_msg("550 File write error\r\n")
+            break
+        end
+    end
+
+    ftp_send_ctrl_msg("226 Transfer completed\r\n")
+    ftp_close_data_conn()
+    sceClose(fd)
 end
 
 
@@ -836,6 +813,21 @@ function ftp_send_rnto()
     end
 end
 
+function ftp_send_site()
+    local action, rule, path = ftp.client.cur_cmd:match("^SITE (.+) (%d+) (.+)")
+    local dir = sanitize_path(ftp.client.cur_path, path)
+
+    if action == "CHMOD" then
+        if syscall.chmod(dir, tonumber(string.format("%04d", rule), 8)):tonumber() < 0 then
+            ftp_send_ctrl_msg("550 Permission denied\r\n")
+        else
+            ftp_send_ctrl_msg("200 OK\r\n")
+        end
+    else
+        ftp_send_ctrl_msg("550 Syntax error, command unrecognized\r\n")
+    end
+end
+
 local command_handlers = {
     USER = function() 
         ftp_send_ctrl_msg("331 Anonymous login accepted, send your email as password\r\n") 
@@ -902,6 +894,9 @@ local command_handlers = {
     end,
     REST = function()
         ftp_send_rest()
+    end,
+    SITE = function()
+        ftp_send_site()
     end,
     QUIT = function() 
         ftp_send_ctrl_msg("221 Goodbye\r\n") 
@@ -999,21 +994,16 @@ end
 function main()
     syscall.resolve({
         unlink = 10,
+        chmod = 15,
         recvfrom = 29, -- recv.
         getsockname = 32,
-        access = 33,
-        readlink = 58,
         connect = 98,
-        netabort = 101,
-        socketclose = 114,
         rename = 128,
         sendto = 133, -- send.
         mkdir = 136,
         rmdir = 137,
         stat = 188,
-        getdirentries = 196,
         getdents = 272,
-        sendfile = 393,
         lseek = 478
     })
 
