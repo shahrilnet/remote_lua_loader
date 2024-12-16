@@ -8,7 +8,7 @@
 -- transferring a large file may crash the application.
 
 -- @horror.
-FTP_DEBUG_MSG = "on"
+FTP_DEBUG_MSG = "off"
 conn_types = {
     none = 0x0,
     active = 0x1,
@@ -533,7 +533,7 @@ function ftp_send_cwd()
     end
 
     --sceKernelSendNotificationRequest("Request Dir: " .. cmd)
-
+    
     if new_path == "/" then
         ftp.client.cur_path = "/"
         ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
@@ -710,18 +710,24 @@ end
 function ftp_send_retr()
     local path = ftp.client.cur_cmd:match("^RETR (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
+    sceKernelSendDebug("Requested (RETR): " .. dir)
+    
     ftp_send_file(dir)
 end
 
 function ftp_send_stor()
     local path = ftp.client.cur_cmd:match("^STOR (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
+    sceKernelSendDebug("Requested (STOR): " .. dir)
+
     ftp_recv_file(dir)
 end
 
 function ftp_send_appe()
     local path = ftp.client.cur_cmd:match("^STOR (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
+    sceKernelSendDebug("Requested (APPE): " .. dir)
+
     ftp.client.restore_point = -1
     ftp_recv_file(dir)
 end
@@ -729,6 +735,8 @@ end
 function ftp_send_rest()
     local rest = ftp.client.cur_cmd:match("^REST (%d+)")
     ftp.client.restore_point = rest
+    sceKernelSendDebug("Requested (REST): " .. rest)
+
     ftp_send_ctrl_msg(string.format("350 Resuming at %d\r\n", rest))
 end
 
@@ -736,6 +744,7 @@ function ftp_send_mkd()
     local path = ftp.client.cur_cmd:match("^MKD (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
 
+    sceKernelSendDebug("Requested (MKD): " .. dir)
     local fd = sceOpen(dir, 0, 0)
     if fd >= 0 then
         ftp_send_ctrl_msg("550 Requested action not taken. Folder already exists.\r\n")
@@ -756,7 +765,7 @@ function ftp_send_rmd()
     local path = ftp.client.cur_cmd:match("^RMD (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
 
-    sceKernelSendDebug("Requested (DELETE_DIR): " .. dir)
+    sceKernelSendDebug("Requested (RMD): " .. dir)
     local fd = sceOpen(dir, 0, 0)
     if fd >= 0 then
         sceClose(fd)
@@ -772,18 +781,13 @@ end
 
 function ftp_send_dele()
     local path = ftp.client.cur_cmd:match("^DELE (.+)")
-    if path:match(".*/") then
-        path = path:match(".*/(.*)")
-    end
-    local dir = string.format("%s/%s", ftp.client.cur_path, path)
+    local dir = sanitize_path(ftp.client.cur_path, path)
 
-    sceKernelSendDebug("Requested (DELETE): " .. dir)
+    sceKernelSendDebug("Requested (DELE): " .. dir)
     if sceUnlink(dir) < 0 then
         ftp_send_ctrl_msg("550 Could not delete the file\r\n")
-        sceKernelSendDebug("Requested (DELETE) [FAIL]: " .. dir)
     else
         ftp_send_ctrl_msg("226 File deleted\r\n")
-        sceKernelSendDebug("Requested (DELETE) [OK]: " .. dir)
     end
 end
 
@@ -791,7 +795,7 @@ function ftp_send_rnfr()
     local path = ftp.client.cur_cmd:match("^RNFR (.+)")
     local dir = sanitize_path(ftp.client.cur_path, path)
 
-    sceKernelSendDebug("Requested (RENAME): " .. dir)
+    sceKernelSendDebug("Requested (RNFR): " .. dir)
     if sceFileExists(dir) then
         ftp.server.rname = path
         ftp_send_ctrl_msg("350 Remembered filename\r\n")
@@ -805,7 +809,7 @@ function ftp_send_rnto()
     local dir_old = sanitize_path(ftp.client.cur_path, ftp.server.rname)
     local dir_new = sanitize_path(ftp.client.cur_path, path)
 
-    sceKernelSendDebug("Requested (RENAME): \n" .. dir_old .. "\n" .. dir_new)
+    sceKernelSendDebug("Requested (RNTO): \n" .. dir_old .. "\n" .. dir_new)
     if sceRename(dir_old, dir_new) < 0 then
         ftp_send_ctrl_msg("550 Error renaming file\r\n")
         return
