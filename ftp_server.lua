@@ -72,6 +72,21 @@ offsets = {
             time = 0xB6130,
             gmtime = 0x3E320,
             gmtime_s = 0x350B0
+        },
+        c = {
+            time = 0x70EB0,
+            gmtime = 0x469E0,
+            gmtime_s = 0x3F540
+        },
+        e = {
+            time = 0x7EEA0,
+            gmtime = 0x96D0,
+            gmtime_s = 0x1640
+        },
+        f = {
+            time = 0xB4F00,
+            gmtime = 0x3DA60,
+            gmtime_s = 0x34790
         }
     }
 }
@@ -82,6 +97,9 @@ function get_offsets(gamename)
     if gamename == "Aibeya" then add_offsets = offsets.libc.aibeya end
     if gamename == "HamidashiCreative" then add_offsets = offsets.libc.hamidashi_creative end
     if gamename == "AikagiKimiIsshoniPack" then add_offsets = offsets.libc.aikagi_kimi_isshoni_pack end
+    if gamename == "C" then add_offsets = offsets.libc.c end
+    if gamename == "E" then add_offsets = offsets.libc.e end
+    if gamename == "F" then add_offsets = offsets.libc.f end
 end
 
 function time(tloc)
@@ -533,7 +551,7 @@ function ftp_send_cwd()
     end
 
     --sceKernelSendNotificationRequest("Request Dir: " .. cmd)
-    
+
     if new_path == "/" then
         ftp.client.cur_path = "/"
         ftp_send_ctrl_msg("250 Requested file action okay, completed.\r\n")
