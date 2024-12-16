@@ -17,7 +17,7 @@ conn_types = {
 
 ftp = {
     server = {
-        ip = "192.168.50.223",
+        ip = "127.0.0.1",
         port = 1337,      -- ftp port.
 
         -- -- -- --
