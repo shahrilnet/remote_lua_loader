@@ -23,7 +23,7 @@ ps5_kernel_offset_list = {
         PMAP_STORE_DMPML4I = 0x288,
         PMAP_STORE_DMPDPI = 0x28C,
     },
-    
+
     [{ "1.05", "1.10", "1.11", "1.12", "1.13", "1.14" }] = {
 
         DATA_BASE = 0x01B40000,
@@ -42,7 +42,7 @@ ps5_kernel_offset_list = {
         PMAP_STORE_DMPML4I = 0x288,
         PMAP_STORE_DMPDPI = 0x28C,
     },
-    
+
     [{ "2.00", "2.20", "2.25", "2.26", "2.30", "2.50", "2.70" }] = {
 
         DATA_BASE = 0x01B80000,
@@ -137,10 +137,10 @@ ps5_kernel_offset_list = {
         PMAP_STORE_DMPML4I = 0x29C,
         PMAP_STORE_DMPDPI = 0x2A0,
     },
-    
+
     [{ "6.00", "6.02", "6.50" }] = {
 
-        DATA_BASE = 0x0C60000,  -- Unconfirmed
+        DATA_BASE = 0x0C60000,
         DATA_SIZE = 0x08861930,
 
         DATA_BASE_DYNAMIC = 0x00010000,
