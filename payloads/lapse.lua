@@ -924,7 +924,7 @@ function verify_reqs2(buf, offset)
     -- all padding bytes must be 0 then
     local state1 = memory.read_dword(buf + offset + 0x38):tonumber()
     local state2 = memory.read_dword(buf + offset + 0x38 + 4):tonumber()
-    if not (state1 > 0 and state2 <= 4) or state2 ~= 0 then
+    if not (state1 > 0 and state1 <= 4) or state2 ~= 0 then
         return false
     end
 
