@@ -919,6 +919,19 @@ function verify_reqs2(buf, offset)
         return false
     end
 
+    -- heap_prefixes is a array of randomized prefix bits from a group of heap
+    -- address candidates. if the candidates truly are from the heap, they must
+    -- share a common prefix
+    local heap_prefixes = {}
+
+    -- check if offsets 0x10 to 0x20 look like a kernel heap address
+    for i = 0x10, 0x20, 8 do
+        if memory.read_word(buf + offset + i + 6):tonumber() ~= 0xffff then
+            return false
+        end
+        table.insert(heap_prefixes, memory.read_word(buf + offset + i + 4):tonumber())
+    end
+
     -- check reqs2.ar2_result.state
     -- state is actually a 32-bit value but the allocated memory was initialized with zeros.
     -- all padding bytes must be 0 then
@@ -933,10 +946,26 @@ function verify_reqs2(buf, offset)
         return false
     end
 
-    local kernel_addr_offset = {0x10, 0x18, 0x20, 0x48, 0x50}
-    for _, addr_offset in ipairs(kernel_addr_offset) do
-        local prefix = memory.read_word(buf + offset + addr_offset + 6):tonumber()
-        if prefix ~= 0xffff then
+    -- check if offsets 0x48 to 0x50 look like a kernel address
+    for i = 0x48, 0x50, 8 do
+        if memory.read_word(buf + offset + i + 6):tonumber() == 0xffff then
+            -- don't push kernel ELF addresses
+            if memory.read_word(buf + offset + i + 4):tonumber() ~= 0xffff then
+                table.insert(heap_prefixes, memory.read_word(buf + offset + i + 4):tonumber())
+            end
+        -- offset 0x48 can be NULL
+        elseif (i == 0x50) or (memory.read_qword(buf + offset + i) ~= uint64(0)) then
+            return false
+        end
+    end
+
+    if #heap_prefixes < 2 then
+        return false
+    end
+
+    local first_prefix = heap_prefixes[1]
+    for idx = 2, #heap_prefixes do
+        if heap_prefixes[idx] ~= first_prefix then
             return false
         end
     end
