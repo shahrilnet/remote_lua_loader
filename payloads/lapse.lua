@@ -1310,11 +1310,11 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
                     local req_id = memory.read_dword(req_id_p)
                     
                     dbgf("req_id = %s", hex(req_id))
-                    memory.write_dword(req_id_p, 0)
 
                     -- set .ar3_done to 1
                     aio_multi_poll(req_id_p, 1, states)
-                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))                    
+                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
+                    memory.write_dword(req_id_p, 0)
 
                     for j=1, NUM_SDS do
                         local sd2 = sds[j]
