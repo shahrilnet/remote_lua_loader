@@ -1468,12 +1468,12 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds)
 
             -- pktopts.ip6po_nhinfo = addr + offset
             memory.write_qword(pktinfo + 8, addr + offset)
-            memory.write_byte(nhop, len - offset)
+            memory.write_dword(nhop, len - offset)
 
             ssockopt(psd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo, pktinfo_len)
             syscall.getsockopt(psd, IPPROTO_IPV6, IPV6_NEXTHOP, read_buf + offset, nhop)
 
-            local n = memory.read_byte(nhop):tonumber()
+            local n = memory.read_dword(nhop):tonumber()
             if n == 0 then
                 memory.write_byte(read_buf + offset, 0)
                 offset = offset + 1
