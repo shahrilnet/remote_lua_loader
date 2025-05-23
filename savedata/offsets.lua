@@ -8,7 +8,8 @@ games_identification = {
     [0x280] = "C",
     [0x600] = "E",
     [0xd80] = "IxSHETell",
-    [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD
+    [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD,
+    [0xb10] = "JinkiResurrection", -- CUSA25179
 }
 
 gadget_table = {
@@ -795,6 +796,100 @@ gadget_table = {
             Mtx_unlock = 0x223A0,
 
             Atomic_fetch_add_8 = 0xE380,
+        }
+    },
+    jinki_resurrection = {
+        gadgets = {
+            ["ret"] = 0x42,
+
+            ["pop rsp; ret"] = 0x992,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0x982,
+            ["pop rbx; ret"] = 0x5b438,
+            ["pop rcx; ret"] = 0xeaa,
+            ["pop rdx; ret"] = 0x57802,
+            ["pop rdi; ret"] = 0xdcc0e,
+            ["pop rsi; ret"] = 0xd330,
+            ["pop r8; ret"] = 0x981,
+
+            ["mov r9, rbx; call [rax + 8]"] = nil,
+            -- or
+            ["pop r13; pop r14; pop r15; ret"] = 0x124418,
+            ["mov r9, r13; call [rax + 8]"] = 0x14A5B0,
+
+            ["mov [rax + 8], rcx; ret"] = 0x14A51A,
+            ["mov [rax + 0x28], rdx; ret"] = 0x15D52F,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xE5FBE,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x12B062,
+            ["add rax, r8; ret"] = 0x9E70,
+
+            ["mov [rdi], rsi; ret"] = 0xE617F,
+            ["mov [rdi], rax; ret"] = 0xA5C17,
+            ["mov [rdi], eax; ret"] = 0xA5C18,
+
+            ["add [rbx], eax; ret"] = nil,
+            -- or
+            ["add [rbx], ecx; ret"] = nil,
+            -- or
+            ["add [rbx], edi; ret"] = 0x482E23,
+
+            ["mov rax, [rax]; ret"] = 0x1E75B,
+            ["inc dword [rax]; ret"] = 0x1B507B,
+
+            -- branching specific gadgets
+            ["cmp [rax], ebx; ret"] = 0x485348,
+            ["sete al; ret"] = 0x51097,
+            ["setne al; ret"] = 0x4BF,
+            ["seta al; ret"] = 0x17B56E,
+            ["setb al; ret"] = 0x5B4B4,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xE055A,
+            ["shl rax, cl; ret"] = 0xEA805,
+            ["add rax, rcx; ret"] = 0x3407E,
+
+            stack_pivot = {
+                ["mov esp, 0xfb0000bd; ret"] = 0x433174, -- crash handler
+                ["mov esp, 0xf00000b9; ret"] = 0x438EBC, -- native handler
+            }
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x1BBB10, -- to resolve eboot base
+            longjmp_import = 0x61B018, -- to resolve libc base
+
+            luaL_optinteger = 0x1B94B0,
+            luaL_checklstring = 0x1B90A0,
+            lua_pushlstring = 0x1B7140,
+            lua_pushinteger = 0x1B7120,
+
+            luaL_newstate = 0x1BA430,
+            luaL_openlibs = 0x1C4510,
+            lua_setfield = 0x1B7C20,
+            luaL_loadstring = 0x1BA3C0,
+            lua_pcall = 0x1B82B0,
+            lua_pushcclosure = 0x1B7350,
+            lua_tolstring = 0x1B6830,
+            lua_pushstring = 0x1B71A0,
+        },
+        libc_addrofs = {
+            calloc = 0x4D610,
+            memcpy = 0x42B10,
+            setjmp = 0xB11B0,
+            longjmp = 0xB1200,
+            strerror = 0x36C90,
+            error = 0x168,
+            sceKernelGetModuleInfoFromAddr = 0x198,
+            gettimeofday_import = 0x1179A8,
+
+            Thrd_join = 0x4CA20,
+            Thrd_exit = 0x4CAA0,
+            Thrd_create = 0x4CC20,
+
+            Mtx_init = 0x4CEA0,
+            Mtx_lock = 0x4CF30,
+            Mtx_unlock = 0x4CF20,
+
+            Atomic_fetch_add_8 = 0x381C0,
         }
     },
 }

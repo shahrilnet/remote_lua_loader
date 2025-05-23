@@ -195,6 +195,11 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.nora_princess.eboot_addrofs
         libc_addrofs = gadget_table.nora_princess.libc_addrofs
         gadgets = gadget_table.nora_princess.gadgets
+    elseif game_name == "JinkiResurrection" then
+        print("[+] Game identified as Jinki Resurrection")
+        eboot_addrofs = gadget_table.jinki_resurrection.eboot_addrofs
+        libc_addrofs = gadget_table.jinki_resurrection.libc_addrofs
+        gadgets = gadget_table.jinki_resurrection.gadgets
     end
 end
 

@@ -14,6 +14,7 @@ Currently this loader is specific for the following list of games:
 7. IxSHE Tell (CUSA17112)
 8. Nora Princess and Stray Cat Heart HD (CUSA13303) - Requires manual loading of savegame
    - Rename save9999.dat into nora_01.dat.
+9. Jinki Resurrection (CUSA25179)
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 
