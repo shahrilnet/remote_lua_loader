@@ -97,7 +97,12 @@ offsets = {
             time = 0x7FBB0,
             gmtime = 0x9730,
             gmtime_s = 0x1600
-        }
+        },
+        jinki_resurrection = {
+            time = 0xB0AB0,
+            gmtime = 0x32150,
+            gmtime_s = 0x28D80
+        },
     }
 }
 
@@ -112,6 +117,7 @@ function get_offsets(gamename)
     if gamename == "E" then add_offsets = offsets.libc.e end
     if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
+    if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
 end
 
 function time(tloc)
