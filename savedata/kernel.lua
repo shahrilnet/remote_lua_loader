@@ -341,7 +341,9 @@ function initialize_kernel_rw()
 
         kernel.rw_initialized = true
 
-        initialize_kernel_offsets()
+        if is_jailbroken() then
+            initialize_kernel_offsets()
+        end
     end
 end
 
