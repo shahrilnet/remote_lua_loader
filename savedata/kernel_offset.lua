@@ -177,52 +177,207 @@ ps5_kernel_offset_list = {
     },
 }
 
+ps4_kernel_offset_list = {
+
+    
+}
+
 function get_ps5_kernel_offset()
 
-    if PLATFORM ~= "ps5" then
-        error("only ps5 is supported by now")
-    end
-
-    local koffset = nil
+    local kernel_offset = {}
 
     for fw_list, offsets in pairs(ps5_kernel_offset_list) do
         for i, check_fw in ipairs(fw_list) do
             if check_fw == FW_VERSION then
-                koffset = offsets
+                kernel_offset = offsets
                 break
             end
         end
     end
 
-    if not koffset then
-        errorf("failed to find offset for fw %s", FW_VERSION)
-    end
-
-    koffset.DATA_BASE_TARGET_ID = koffset.DATA_BASE_SECURITY_FLAGS + 0x09
-    koffset.DATA_BASE_QA_FLAGS = koffset.DATA_BASE_SECURITY_FLAGS + 0x24
-    koffset.DATA_BASE_UTOKEN_FLAGS = koffset.DATA_BASE_SECURITY_FLAGS + 0x8C
+    kernel_offset.DATA_BASE_TARGET_ID = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x09
+    kernel_offset.DATA_BASE_QA_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x24
+    kernel_offset.DATA_BASE_UTOKEN_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x8C
 
     -- static structure offsets
     -- note: the one marked with -1 will be resolved at runtime
 
     -- proc structure
-    koffset.PROC_PID = 0xbc
-    koffset.PROC_VM_SPACE = 0x200
-    koffset.PROC_COMM = -1
-    koffset.PROC_SYSENT = -1
+    kernel_offset.PROC_FD = 0x48
+    kernel_offset.PROC_PID = 0xbc
+    kernel_offset.PROC_VM_SPACE = 0x200
+    kernel_offset.PROC_COMM = -1
+    kernel_offset.PROC_SYSENT = -1
+
+    -- filedesc
+    kernel_offset.FILEDESC_OFILES = 0x8
+    kernel_offset.SIZEOF_OFILES = 0x30
 
     -- vmspace structure
-    koffset.VMSPACE_VM_PMAP = -1
-    koffset.VMSPACE_VM_VMID = -1
+    kernel_offset.VMSPACE_VM_PMAP = -1
+    kernel_offset.VMSPACE_VM_VMID = -1
 
     -- pmap structure
-    koffset.PMAP_CR3 = 0x28
+    kernel_offset.PMAP_CR3 = 0x28
 
     -- gpu vmspace structure
-    koffset.SIZEOF_GVMSPACE = 0x100
-    koffset.GVMSPACE_START_VA = 0x8
-    koffset.GVMSPACE_SIZE = 0x10
-    koffset.GVMSPACE_PAGE_DIR_VA = 0x38
+    kernel_offset.SIZEOF_GVMSPACE = 0x100
+    kernel_offset.GVMSPACE_START_VA = 0x8
+    kernel_offset.GVMSPACE_SIZE = 0x10
+    kernel_offset.GVMSPACE_PAGE_DIR_VA = 0x38
 
-    return koffset
+    -- net
+    kernel_offset.SO_PCB = 0x18
+    kernel_offset.INPCB_PKTOPTS = 0x120
+
+    return kernel_offset
+end
+
+function get_ps4_kernel_offset()
+
+    local kernel_offset = {}
+
+    for fw_list, offsets in pairs(ps4_kernel_offset_list) do
+        for i, check_fw in ipairs(fw_list) do
+            if check_fw == FW_VERSION then
+                kernel_offset = offsets
+                break
+            end
+        end
+    end
+
+    -- proc structure
+    kernel_offset.PROC_FD = 0x48
+    kernel_offset.PROC_PID = 0xb0
+    kernel_offset.PROC_VM_SPACE = 0x200
+    kernel_offset.PROC_COMM = -1
+    kernel_offset.PROC_SYSENT = -1
+
+    -- filedesc
+    kernel_offset.FILEDESC_OFILES = 0x0
+    kernel_offset.SIZEOF_OFILES = 0x8
+    
+    -- vmspace structure
+    kernel_offset.VMSPACE_VM_PMAP = -1
+    kernel_offset.VMSPACE_VM_VMID = -1
+
+    -- pmap structure
+    kernel_offset.PMAP_CR3 = 0x28
+
+    -- net
+    kernel_offset.SO_PCB = 0x18
+    kernel_offset.INPCB_PKTOPTS = 0x118
+
+    return kernel_offset
+end
+
+function get_kernel_offset()
+    if PLATFORM == "ps4" then
+        return get_ps4_kernel_offset()
+    elseif PLATFORM == "ps5" then
+        return get_ps5_kernel_offset()
+    end
+end
+
+-- find some structure offsets at runtime
+function update_kernel_offsets()
+
+    local offsets = find_additional_offsets()
+
+    for k,v in pairs(offsets) do
+        kernel_offset[k] = v
+    end
+end
+
+-- credit: @hammer-83
+function find_vmspace_pmap_offset()
+
+    local vmspace = kernel.read_qword(kernel.addr.curproc + kernel_offset.PROC_VM_SPACE)
+    
+    -- Note, this is the offset of vm_space.vm_map.pmap on 1.xx.
+    -- It is assumed that on higher firmwares it's only increasing.
+    local cur_scan_offset = 0x1C8
+    
+    for i=1,6 do
+        local scan_val = kernel.read_qword(vmspace + cur_scan_offset + (i * 8))
+        local offset_diff = (scan_val - vmspace):tonumber()
+        if offset_diff >= 0x2C0 and offset_diff <= 0x2F0 then
+            return cur_scan_offset + (i * 8)
+        end
+    end
+
+    error("failed to find VMSPACE_VM_PMAP offset")
+end
+
+
+-- credit: @hammer-83
+function find_vmspace_vmid_offset()
+
+    local vmspace = kernel.read_qword(kernel.addr.curproc + kernel_offset.PROC_VM_SPACE)
+
+    -- Note, this is the offset of vm_space.vm_map.vmid on 1.xx.
+    -- It is assumed that on higher firmwares it's only increasing.
+    local cur_scan_offset = 0x1D4
+    
+    for i=1,8 do
+        local scan_offset = cur_scan_offset + (i * 4)
+        local scan_val = kernel.read_dword(vmspace + scan_offset):tonumber()
+        if scan_val > 0 and scan_val <= 0x10 then
+            return scan_offset
+        end
+    end
+
+    error("failed to find VMSPACE_VM_VMID offset")
+end
+
+function find_proc_offsets()
+
+    local proc_data = kernel.read_buffer(kernel.addr.curproc, 0x1000)
+    local proc_data_addr = lua.resolve_value(proc_data)
+
+    local p_comm_sign = find_pattern(proc_data, "ce fa ef be cc bb")
+    local p_sysent_sign = find_pattern(proc_data, "ff ff ff ff ff ff ff 7f")
+
+    if not p_comm_sign then
+        error("failed to find offset for PROC_COMM")
+    end
+
+    if not p_sysent_sign then
+        error("failed to find offset for PROC_SYSENT")
+    end
+
+    local p_comm_offset = p_comm_sign[1] - 1 + 0x8
+    local p_sysent_offset = p_sysent_sign[1] - 1 - 0x10
+
+    return {
+        PROC_COMM = p_comm_offset,
+        PROC_SYSENT = p_sysent_offset
+    }
+end
+
+function find_additional_offsets()
+
+    local proc_offsets = find_proc_offsets()
+
+    local vm_map_pmap_offset = nil
+    local vm_map_vmid_offset = nil
+
+    -- not tested on ps4. ignore for now.
+    -- maybe can just hardcode if offset is not changes between fw on ps4
+    if PLATFORM == "ps5" then
+        vm_map_pmap_offset = find_vmspace_pmap_offset()
+        vm_map_vmid_offset =  find_vmspace_vmid_offset()
+    end
+
+    return {
+        PROC_COMM = proc_offsets.PROC_COMM,
+        PROC_SYSENT = proc_offsets.PROC_SYSENT,
+        VMSPACE_VM_PMAP = vm_map_pmap_offset,
+        VMSPACE_VM_VMID = vm_map_vmid_offset,
+    }
+end
+
+-- compatibility layer so ppl using older umtx payload can still work
+function initialize_kernel_offsets()
+    update_kernel_offsets()
 end

@@ -3,7 +3,7 @@
 
 -- gpu page table
 
-GPU_PDE = {
+GPU_PDE_SHIFT = {
     VALID = 0,
     IS_PTE = 54,
     TF = 56,
@@ -20,7 +20,7 @@ GPU_PDE_MASKS = {
 GPU_PDE_ADDR_MASK = uint64("0x0000ffffffffffc0")
 
 function gpu_pde_field(pde, field)
-    local shift = GPU_PDE[field]
+    local shift = GPU_PDE_SHIFT[field]
     local mask = GPU_PDE_MASKS[field]
     return bit64.band(bit64.rshift(pde, shift), mask):tonumber()
 end
@@ -108,7 +108,7 @@ gpu.dmem_size = 2 * 0x100000 -- 2mb
 
 function gpu.setup()
 
-    check_jailbroken()
+    is_kernel_rw_available()
 
     local libSceGnmDriver = find_mod_by_name("libSceGnmDriverForNeoMode.sprx")
 

@@ -1096,7 +1096,7 @@ function get_kprim_curthr_from_kstack()
     end
 
     -- Find address with most occurance
-    local curthr_count, curthr_addr = 0
+    local curthr_count, curthr_addr = 0, 0
 
     for k, v in pairs(kernel_ptrs) do
         if v > curthr_count and uint64(k) < uint64("0xffffffffffffffff") then
@@ -1114,7 +1114,7 @@ end
 
 
 function get_fd_data_addr(fd)
-    local filedescent_addr = kernel.addr.curproc_ofiles + fd * 0x30
+    local filedescent_addr = kernel.addr.curproc_ofiles + fd * kernel_offset.SIZEOF_OFILES
     local file_addr = kernel.read_qword(filedescent_addr + 0x0) -- fde_file
     return kernel.read_qword(file_addr + 0x0) -- f_data
 end
@@ -1156,12 +1156,12 @@ function get_dmap_base()
 end
 
 
--- use slow kernel r/w to find kernel addresses 
+-- use slow kernel r/w to find kernel addresses
 function get_initial_kernel_address()
     kernel.addr.kprim_curthr = get_kprim_curthr_from_kstack()
     kernel.addr.curproc = kernel.read_qword(kernel.addr.kprim_curthr + OFFSET_THREAD_TD_PROC) -- td_proc
-    kernel.addr.curproc_fd = kernel.read_qword(kernel.addr.curproc + OFFSET_P_FD) -- p_fd (filedesc)
-    kernel.addr.curproc_ofiles = kernel.read_qword(kernel.addr.curproc_fd) + OFFSET_FDESCENTTBL_FDT_OFILES -- fdt_nfiles
+    kernel.addr.curproc_fd = kernel.read_qword(kernel.addr.curproc + kernel_offset.PROC_FD) -- p_fd (filedesc)
+    kernel.addr.curproc_ofiles = kernel.read_qword(kernel.addr.curproc_fd) + kernel_offset.FILEDESC_OFILES -- fdt_nfiles
 end
 
 -- use fast kernel r/w to find additional kernel addresses
@@ -1204,7 +1204,7 @@ function fixup_bad_fds()
 
     for fd, _ in pairs(umtx.data.fd_tofix) do
 
-        local filedescent_addr = kernel.addr.curproc_ofiles + fd * 0x30
+        local filedescent_addr = kernel.addr.curproc_ofiles + fd * kernel_offset.SIZEOF_OFILES
         local file_addr = kernel.read_qword(filedescent_addr + 0x0) -- fde_file
         local file_data_addr = kernel.read_qword(file_addr + 0x0) -- f_data
 
@@ -1243,7 +1243,7 @@ end
 
 function escape_filesystem_sandbox(proc)
     
-    local proc_fd = kernel.read_qword(proc + OFFSET_P_FD) -- p_fd
+    local proc_fd = kernel.read_qword(proc + kernel_offset.PROC_FD) -- p_fd
     local rootvnode = kernel.read_qword(kernel.addr.data_base + kernel_offset.DATA_BASE_ROOTVNODE)
 
     kernel.write_qword(proc_fd + 0x10, rootvnode) -- fd_rdir
@@ -1403,8 +1403,6 @@ function run_hax()
     local prev_core = get_current_core()
     local prev_rtprio = get_rtprio()
 
-    kernel_offset = get_ps5_kernel_offset()
-
     kstack_kernel_rw.init()
     print_info()
 
@@ -1435,16 +1433,16 @@ function run_hax()
     -- patch current process creds
     escalate_curproc()
 
-    initialize_kernel_offsets()
+    update_kernel_offsets()
 
     -- init GPU DMA for kernel r/w on protected area
     gpu.setup()
 
-    if tonumber(FW_VERSION) >= 6 or force_kdata_patch_with_gpu then
-        print("applying patches to kernel .data (with GPU DMA method)")
+    if tonumber(FW_VERSION) >= 7 or force_kdata_patch_with_gpu then
+        print("applying patches to kernel data (with GPU DMA method)")
         apply_patches_to_kernel_data(gpu)
     else
-        print("applying patches to kernel .data")
+        print("applying patches to kernel data")
         apply_patches_to_kernel_data(kernel)
     end
 

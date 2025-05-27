@@ -235,7 +235,7 @@ function remote_lua_loader(port)
         client_fd = nil
 
         -- init kernel r/w class if exploit state exists
-        if not kernel.rw_initialized then
+        if not is_kernel_rw_available() then
             initialize_kernel_rw()
         end
 
@@ -294,6 +294,8 @@ function main()
     FW_VERSION = get_version()
 
     thread.init()
+
+    kernel_offset = get_kernel_offset()
 
     local run_loader = function()
         local port = 9026

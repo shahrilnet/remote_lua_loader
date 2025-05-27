@@ -389,7 +389,10 @@ end
 
 function dlsym(handle, sym)
 
-    -- check_jailbroken()
+    if PLATFORM == "ps5" and tonumber(FW_VERSION) >= 5 then
+        check_jailbroken()
+    end
+    
     assert(type(sym) == "string")
     
     local addr_out = memory.alloc(0x8)

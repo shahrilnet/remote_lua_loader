@@ -13,13 +13,18 @@ Examples:
 | ftp_server.lua | Runs an FTP server on port 1337 that allows browsing the filesystem as seen by the game process, and also upload and download files. If the game process is jailbroken, it can access more files / directories on the filesystem. |
 | umtx.lua | Kernel exploit for PS5 (fw <= 7.61). Once done, it will jailbreak the game process as well as the PlayStation, allowing for more access to the system. |
 
-### Payloads after jailbroken game process (specific for PS5)
+### Payloads after getting kernel r/w
 
-| Payload | Description |
-| -------- | ------- |
-| kdata_dumper.lua | Dump content of kernel .data segments over network (NOTE: you must modify the IP address before you run this payload) |
-| read_klog.lua | Read content of `/dev/klog`. |
-| elf_loader.lua | Rudimentary ELF loader to load from file system. By default it will try to load John Tornblom's [elfldr.elf](https://github.com/ps5-payload-dev/elfldr) shipped with savedata, or alternatively from `/data/elfldr.elf` if you need to have updated elfldr.elf (you need to place there yourself using FTP server). |
+| Payload | Target | Description |
+| -------- | ------- | ------- |
+| kdata_dumper.lua | PS5 | Dump content of kernel data segments over network until it crashes (NOTE: you must modify the IP address before you run this payload) |
+
+### Payloads after jailbroken game process
+
+| Payload | Target | Description |
+| -------- | ------- | ------- |
+| read_klog.lua | PS5 | Read content of `/dev/klog`. |
+| elf_loader.lua | PS5 | Rudimentary ELF loader to load from file system. By default it will try to load John Tornblom's [elfldr.elf](https://github.com/ps5-payload-dev/elfldr) shipped with savedata, or alternatively from `/data/elfldr.elf` if you need to have updated elfldr.elf (you need to place there yourself using FTP server). |
 
 ### send_lua.py additional options
 

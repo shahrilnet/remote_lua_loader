@@ -222,6 +222,10 @@ function main()
 
     check_jailbroken()
 
+    if PLATFORM ~= "ps5" then
+        error("this payload only targets ps5")
+    end
+
     syscall.resolve({
         jitshm_create = 0x215,
         jitshm_alias = 0x216,

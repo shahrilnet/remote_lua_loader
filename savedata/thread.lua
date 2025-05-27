@@ -180,7 +180,7 @@ function run_lua_code_in_new_thread(lua_code, opt)
             storage.data = storage_data
 
             -- init kernel r/w class if exploit state exists
-            if not kernel.rw_initialized then
+            if not is_kernel_rw_available() then
                 initialize_kernel_rw()
             end
 

