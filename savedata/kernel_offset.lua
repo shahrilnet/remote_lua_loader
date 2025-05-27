@@ -190,14 +190,13 @@ function get_ps5_kernel_offset()
         for i, check_fw in ipairs(fw_list) do
             if check_fw == FW_VERSION then
                 kernel_offset = offsets
+                kernel_offset.DATA_BASE_TARGET_ID = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x09
+                kernel_offset.DATA_BASE_QA_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x24
+                kernel_offset.DATA_BASE_UTOKEN_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x8C
                 break
             end
         end
     end
-
-    kernel_offset.DATA_BASE_TARGET_ID = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x09
-    kernel_offset.DATA_BASE_QA_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x24
-    kernel_offset.DATA_BASE_UTOKEN_FLAGS = kernel_offset.DATA_BASE_SECURITY_FLAGS + 0x8C
 
     -- static structure offsets
     -- note: the one marked with -1 will be resolved at runtime
