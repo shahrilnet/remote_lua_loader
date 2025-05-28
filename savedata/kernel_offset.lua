@@ -194,6 +194,25 @@ ps5_kernel_offset_list = {
         PMAP_STORE_DMPML4I = nil,
         PMAP_STORE_DMPDPI = nil,
     },
+
+    [{ "10.00", "10.01" }] = {
+
+        DATA_BASE = 0xCB0000,
+        DATA_SIZE = nil,
+
+        DATA_BASE_DYNAMIC = 0x10000,
+        DATA_BASE_TO_DYNAMIC = nil,
+        DATA_BASE_ALLPROC = 0x2775D70,
+        DATA_BASE_SECURITY_FLAGS = 0xD89064,
+        DATA_BASE_ROOTVNODE = 0x2FB3510,
+        DATA_BASE_KERNEL_PMAP_STORE = 0x2D00EF8,
+        DATA_BASE_DATA_CAVE = nil,
+        DATA_BASE_GVMSPACE = 0x2D62570,
+
+        PMAP_STORE_PML4PML4I = nil,
+        PMAP_STORE_DMPML4I = nil,
+        PMAP_STORE_DMPDPI = nil,
+    },
 }
 
 ps4_kernel_offset_list = {
