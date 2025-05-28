@@ -783,7 +783,7 @@ gadget_table = {
             setjmp = 0x802A0,
             longjmp = 0x802F0,
             strerror = 0xCF70,
-            error = 0x13E,
+            error = 0x138,
             sceKernelGetModuleInfoFromAddr = 0x568,
             gettimeofday_import = 0xEFE20, -- syscall wrapper
 
