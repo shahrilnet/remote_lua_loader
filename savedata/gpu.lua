@@ -108,7 +108,7 @@ gpu.dmem_size = 2 * 0x100000 -- 2mb
 
 function gpu.setup()
 
-    is_kernel_rw_available()
+    check_kernel_rw()
 
     local libSceGnmDriver = find_mod_by_name("libSceGnmDriverForNeoMode.sprx")
 

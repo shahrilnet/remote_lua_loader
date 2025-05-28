@@ -235,7 +235,7 @@ function remote_lua_loader(port)
         client_fd = nil
 
         -- init kernel r/w class if exploit state exists
-        if not is_kernel_rw_available() then
+        if not kernel.rw_initialized then
             initialize_kernel_rw()
         end
 

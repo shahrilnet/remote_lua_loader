@@ -55,13 +55,15 @@ function dump_kdata_over_network(kdata_base)
     memory.write_word(sockaddr_in + 2, htons(PORT)) -- sin_port
     memory.write_dword(sockaddr_in + 4, aton(IP)) -- sin_addr
 
-    printf("trying to connect to %s:%d. fd = %d", IP, PORT, sock_fd)
+    printf("trying to connect to %s:%d", IP, PORT)
 
     if syscall.connect(sock_fd, sockaddr_in, 16):tonumber() == -1 then
         error("connect() error: " .. get_error_string())
     end
 
     print("connected sucessfully")
+
+    print("dumping kdata until crashing...")
 
     local read_size = PAGE_SIZE
     local mem = memory.alloc(read_size)
@@ -106,7 +108,7 @@ function main()
         kdata_base = find_kdata_base_offset(kernel.addr.inside_kdata)
     end
 
-    print("kdata base: %s", hex(kdata_base))
+    printf("kdata base: %s", hex(kdata_base))
 
     dump_kdata_over_network(kdata_base)
 end
