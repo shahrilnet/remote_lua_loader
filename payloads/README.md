@@ -12,6 +12,7 @@ Examples:
 | hello_world.lua | Prints basic information back from the game process - its process id, the base of the eboot, libc and libkernel. |
 | ftp_server.lua | Runs an FTP server on port 1337 that allows browsing the filesystem as seen by the game process, and also upload and download files. If the game process is jailbroken, it can access more files / directories on the filesystem. |
 | umtx.lua | Kernel exploit for PS5 (fw <= 7.61). Once done, it will jailbreak the game process as well as the PlayStation, allowing for more access to the system. |
+| lapse.lua | Kernel exploit for PS5 (fw <= 10.01). Once done, it will jailbreak the game process as well as the PlayStation, allowing for more access to the system. |
 
 ### Payloads after getting kernel r/w
 
