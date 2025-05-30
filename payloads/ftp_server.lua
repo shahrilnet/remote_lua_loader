@@ -103,11 +103,6 @@ offsets = {
             gmtime = 0x32150,
             gmtime_s = 0x28D80
         },
-        fuyu_kiss = {
-            time = 0xAFD30,
-            gmtime = 0x31B00,
-            gmtime_s = 0x287A0
-        },
     }
 }
 
@@ -123,6 +118,7 @@ function get_offsets(gamename)
     if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
+    if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess end --same as nora princess 1
 end
 
 function time(tloc)
