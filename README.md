@@ -16,6 +16,7 @@ Currently this loader is specific for the following list of games:
    - Rename save9999.dat into nora_01.dat.
 9. Jinki Resurrection (CUSA25179)
 10. Jinki Resurrection Demo (CUSA25180) - Requires latest firmware to download from PSN
+11. Nora Princess and Stray Cat Heart 2 (CUSA13586)
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 
