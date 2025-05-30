@@ -1,3 +1,24 @@
+--[[
+    Copyright (C) 2025 anonymous
+
+    This file `lapse.lua` contains a derivative work of `lapse.mjs`, 
+    which originally is a part of PSFree.
+    
+    Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/psfree-1.5rc1.7z
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
 
 syscall.resolve({
     unlink = 0xa,
