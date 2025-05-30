@@ -20,6 +20,27 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
+
+
+-- configuration
+
+MAIN_CORE = 4
+MAIN_RTPRIO = 0x100
+
+NUM_WORKERS = 2
+NUM_GROOMS = 0x200
+NUM_HANDLES = 0x100
+NUM_RACES = 100
+NUM_SDS = 64
+NUM_SDS_ALT = 48
+NUM_ALIAS = 100
+LEAK_LEN = 16
+NUM_LEAKS = 16
+NUM_CLOBBERS = 8
+
+
+
+
 syscall.resolve({
     unlink = 0xa,
 
@@ -53,25 +74,6 @@ syscall.resolve({
     aio_multi_cancel = 0x29a,
     aio_submit_cmd = 0x29d,
 })
-
-
-
--- configuration
-
-MAIN_CORE = 4
-MAIN_RTPRIO = 0x100
-
-NUM_WORKERS = 2
-NUM_GROOMS = 0x200
-NUM_HANDLES = 0x100
-NUM_RACES = 100
-NUM_SDS = 64
-NUM_SDS_ALT = 48
-NUM_ALIAS = 100
-LEAK_LEN = 16
-NUM_LEAKS = 16
-NUM_CLOBBERS = 8
-
 
 
 
