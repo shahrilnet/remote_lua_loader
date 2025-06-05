@@ -208,27 +208,9 @@ function lua.resolve_game(luaB_auxwrap)
     elseif game_name == "FuyuKiss" then
         print("[+] Game identified as CUSA29745 Fuyu Kiss")
         eboot_addrofs = gadget_table.fuyu_kiss.eboot_addrofs
-        print(">> Debug eboot_addrofs table for FuyuKiss")
-        for k, v in pairs(eboot_addrofs or {}) do
-            print(" - ", k, string.format("0x%X", v))
-        end
-
-        if not eboot_addrofs.luaL_optinteger then
-            print("[ERROR] luaL_optinteger is nil in eboot_addrofs")
-        end
         libc_addrofs = gadget_table.fuyu_kiss.libc_addrofs
         gadgets = gadget_table.fuyu_kiss.gadgets
     end
-
-        print(">> Debug libc_addrofs table for FuyuKiss")
-    for k, v in pairs(libc_addrofs or {}) do
-        print(" - ", k, string.format("0x%X", v))
-    end
-
-    if not libc_addrofs or not libc_addrofs.longjmp then
-        print("[ERROR] longjmp is nil in libc_addrofs")
-    end
-
 end
 
 function lua.resolve_address()

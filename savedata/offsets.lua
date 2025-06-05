@@ -10,8 +10,8 @@ games_identification = {
     [0xd80] = "IxSHETell",
     [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD,
     [0xb10] = "JinkiResurrection", -- CUSA25179
-    [0x2e0] = "NoraPrincess2", --CUSA13586 Nora Princess and Stray Cat Heart  2 
-    [0x410] = "FuyuKiss", --CUSA29745 FUYU KISS
+    [0x2e0] = "NoraPrincess2",  --CUSA13586 Nora Princess and Stray Cat Heart  2 
+    [0x410] = "FuyuKiss",  --CUSA29745 FUYU KISS
 }
 
 gadget_table = {
@@ -1040,7 +1040,7 @@ gadget_table = {
             }
         },
         eboot_addrofs = {
-            fake_string = 0x600180, --OK
+            fake_string = 0x600182, --OK
             luaB_auxwrap =  0x1bd410, --OK
             longjmp_import = 0x61c658, --OK
 
