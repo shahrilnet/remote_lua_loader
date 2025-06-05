@@ -103,6 +103,11 @@ offsets = {
             gmtime = 0x32150,
             gmtime_s = 0x28D80
         },
+        fuyu_kiss = {
+            time = 0xafd30,
+            gmtime = 0x31b00,
+            gmtime_s = 0x287a0
+        },
     }
 }
 
@@ -119,6 +124,8 @@ function get_offsets(gamename)
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
     if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess end --same as nora princess 1
+    if gamename == "FuyuKiss" then add_offsets = offsets.libc.fuyu_kiss end --same as nora princess 1
+
 end
 
 function time(tloc)

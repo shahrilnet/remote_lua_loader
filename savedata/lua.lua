@@ -205,6 +205,11 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.nora_princess2.eboot_addrofs
         libc_addrofs = gadget_table.nora_princess2.libc_addrofs
         gadgets = gadget_table.nora_princess2.gadgets
+    elseif game_name == "FuyuKiss" then
+        print("[+] Game identified as CUSA29745 Fuyu Kiss")
+        eboot_addrofs = gadget_table.fuyu_kiss.eboot_addrofs
+        libc_addrofs = gadget_table.fuyu_kiss.libc_addrofs
+        gadgets = gadget_table.fuyu_kiss.gadgets
     end
 end
 
@@ -261,6 +266,7 @@ function lua.resolve_address()
     lua.setup_better_read_primitive()
 
     -- resolve libc
+    print("[debug] libc_addrofs.longjmp = " .. tostring(libc_addrofs.longjmp))  -- puede ser nil
     libc_base = memory.read_qword(eboot_addrofs.longjmp_import) - libc_addrofs.longjmp
     print("[+] libc base @ " .. hex(libc_base))
     

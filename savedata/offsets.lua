@@ -10,7 +10,8 @@ games_identification = {
     [0xd80] = "IxSHETell",
     [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD,
     [0xb10] = "JinkiResurrection", -- CUSA25179
-    [0x2e0] = "NoraPrincess2", --CUSA13586 Nora Princess and Stray Cat Heart  2
+    [0x2e0] = "NoraPrincess2",  --CUSA13586 Nora Princess and Stray Cat Heart  2 
+    [0x410] = "FuyuKiss",  --CUSA29745 FUYU KISS
 }
 
 gadget_table = {
@@ -197,7 +198,9 @@ gadget_table = {
             ["pop rdi; ret"] = 0xcd77e,
             ["pop rsi; ret"] = 0x10d92d,
             ["pop r8; ret"] = 0x9f1,
+
             ["mov r9, rbx; call [rax + 8]"] = nil,
+
             ["pop r13; pop r14; pop r15; ret"] = 0x1150f3,
             ["mov r9, r13; call [rax + 8]"] = 0x13b504,
             
@@ -210,6 +213,7 @@ gadget_table = {
             ["mov [rdi], rsi; ret"] = 0xd6c4f,
             ["mov [rdi], rax; ret"] = 0x95bbb,
             ["mov [rdi], eax; ret"] = 0x95bbc,
+
             ["add [rbx], eax; ret"] = nil,
             ["add [rbx], ecx; ret"] = nil,
             ["add [rbx], edi; ret"] = 0x3eb1d3,
@@ -707,52 +711,52 @@ gadget_table = {
     },
     nora_princess = {
         gadgets = {
-            ["ret"] = 0x4c,
+            ["ret"] = 0x4c, --OK
 
-            ["pop rsp; ret"] = 0x982,
-            ["pop rbp; ret"] = 0x79,
-            ["pop rax; ret"] = 0x972,
-            ["pop rbx; ret"] = 0xd0b25,
-            ["pop rcx; ret"] = 0xc62,
-            ["pop rdx; ret"] = 0x249e2,
-            ["pop rdi; ret"] = 0x509cd,
-            ["pop rsi; ret"] = 0xe3534,
-            ["pop r8; ret"] = 0x971,
+            ["pop rsp; ret"] = 0x982,--OK
+            ["pop rbp; ret"] = 0x79,--OK
+            ["pop rax; ret"] = 0x972,--OK
+            ["pop rbx; ret"] = 0xd0b25, --OK
+            ["pop rcx; ret"] = 0xc62, --OK
+            ["pop rdx; ret"] = 0x249e2,--OK
+            ["pop rdi; ret"] = 0x509cd, --OK
+            ["pop rsi; ret"] = 0xe3534,--OK
+            ["pop r8; ret"] = 0x971, --NO LO ENCUENTRA
 
-            ["mov r9, rbx; call [rax + 8]"] = 0x14fc50,
+            ["mov r9, rbx; call [rax + 8]"] = 0x14fc50, --no lo encuentra
             -- or
-            ["pop r13; pop r14; pop r15; ret"] = 0x114543,
-            ["mov r9, r13; call [rax + 8]"] = 0x13ae54,
+            ["pop r13; pop r14; pop r15; ret"] = 0x114543,--ok
+            ["mov r9, r13; call [rax + 8]"] = 0x13ae54, --no lo encuentra
 
-            ["mov [rax + 8], rcx; ret"] = 0x13adda,
-            ["mov [rax + 0x28], rdx; ret"] = 0x14deaf,
-            ["mov [rcx + 0xa0], rdi; ret"] = 0xd4afe,
-            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11b4f2,
-            ["add rax, r8; ret"] = 0xb423,
+            ["mov [rax + 8], rcx; ret"] = 0x13adda, --ok
+            ["mov [rax + 0x28], rdx; ret"] = 0x14deaf,--ok
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd4afe, --no lo encuentra
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11b4f2, --no lo encuentra
+            ["add rax, r8; ret"] = 0xb423, --ok
 
-            ["mov [rdi], rsi; ret"] = 0xd4ccf,
-            ["mov [rdi], rax; ret"] = 0x972db,
-            ["mov [rdi], eax; ret"] = nil,
+            ["mov [rdi], rsi; ret"] = 0xd4ccf,--ok
+            ["mov [rdi], rax; ret"] = 0x972db, --ok
+            ["mov [rdi], eax; ret"] = nil, --ni sale
 
-            ["add [rbx], eax; ret"] = 0x425a3b,
+            ["add [rbx], eax; ret"] = 0x425a3b,--ok
             -- or
             ["add [rbx], ecx; ret"] = nil,
             -- or
-            ["add [rbx], edi; ret"] = 0x403ad3,
+            ["add [rbx], edi; ret"] = 0x403ad3,--ok
 
-            ["mov rax, [rax]; ret"] = 0x20e3b,
-            ["inc dword [rax]; ret"] = 0x199d7b,
+            ["mov rax, [rax]; ret"] = 0x20e3b,--ok
+            ["inc dword [rax]; ret"] = 0x199d7b, --ok
 
             -- branching specific gadgets
-            ["cmp [rax], ebx; ret"] = 0x405fc8,
-            ["sete al; ret"] = 0x5e495,
-            ["setne al; ret"] = 0x1f14e,
-            ["seta al; ret"] = 0x16c0ae,
-            ["setb al; ret"] = 0x5e4b4,
+            ["cmp [rax], ebx; ret"] = 0x405fc8,--ok
+            ["sete al; ret"] = 0x5e495, --ok
+            ["setne al; ret"] = 0x1f14e, --ok
+            ["seta al; ret"] = 0x16c0ae, --ok
+            ["setb al; ret"] = 0x5e4b4, --ok
             ["setg al; ret"] = nil,
-            ["setl al; ret"] = 0xcefda,
-            ["shl rax, cl; ret"] = 0xd9551,
-            ["add rax, rcx; ret"] = 0x366ee,
+            ["setl al; ret"] = 0xcefda,--ok
+            ["shl rax, cl; ret"] = 0xd9551,--ok
+            ["add rax, rcx; ret"] = 0x366ee, --no existe
 
             stack_pivot = {
                 ["mov esp, 0xfb0000bd; ret"] = 0x3b44d4, -- crash handler
@@ -985,4 +989,96 @@ gadget_table = {
             Atomic_fetch_add_8 = 0xE380,---OK2
         }
     },
+    fuyu_kiss = {
+        gadgets = {
+            ["ret"] = 0x42,
+
+            ["pop rsp; ret"] = 0x66090,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0xB02,
+            ["pop rbx; ret"] = 0x5D918,
+            ["pop rcx; ret"] = 0x12C4,
+            ["pop rdx; ret"] = 0x1BFBF2,
+            ["pop rdi; ret"] = 0xE0B3E,
+            ["pop rsi; ret"] = 0xE0FD,
+            ["pop r8; ret"] = 0xB01,
+
+            ["mov r9, rbx; call [rax + 8]"] = nil,
+
+            ["pop r13; pop r14; pop r15; ret"] = 0x158107,
+            ["mov r9, r13; call [rax + 8]"] = 0x14CA80,
+
+            ["mov [rax + 8], rcx; ret"] = 0x14C9EA,
+            ["mov [rax + 0x28], rdx; ret"] = 0x15F83F,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xE9DAE,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x12DDF2,
+            ["add rax, r8; ret"] = 0xAE10,
+
+            ["mov [rdi], rsi; ret"] = 0xE9F6F,
+            ["mov [rdi], rax; ret"] = 0xA99B7,
+            ["mov [rdi], eax; ret"] = 0xA99B8,
+
+            ["add [rbx], eax; ret"] = nil,
+            ["add [rbx], ecx; ret"] = nil,
+            ["add [rbx], edi; ret"] = 0x4825F3,
+            ["mov rax, [rax]; ret"] = 0x202FB,
+            ["inc dword [rax]; ret"] = 0x1B6BAB,
+
+            ["cmp [rax], ebx; ret"] = 0x484B28,
+            ["sete al; ret"] = 0x533B7,
+            ["setne al; ret"] = 0x4CF,
+            ["seta al; ret"] = 0x17D66E,
+            ["setb al; ret"] = 0x5D993,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xE448A,
+            ["shl rax, cl; ret"] = 0xEE635,
+            ["add rax, rcx; ret"] = 0x3618E,
+
+            stack_pivot = {
+                ["mov esp, 0xfb0000bd; ret"] = 0x432954,
+                ["mov esp, 0xf00000b9; ret"] = 0x43869C,
+            }
+        },
+        eboot_addrofs = {
+            fake_string = 0x600182, --OK
+            luaB_auxwrap =  0x1bd410, --OK
+            longjmp_import = 0x61c658, --OK
+
+            luaL_optinteger = 0x1bad80, --OK
+            luaL_checklstring = 0x1ba970,--OK
+            lua_pushlstring = 0x1b8aa0, --OK
+            lua_pushinteger = 0x1b8a80, --OK
+
+            luaL_newstate = 0x1bbd40, --OK
+            luaL_openlibs = 0x1c5dd0, --OK 
+            lua_setfield = 0x1b9540, --OK
+            luaL_loadstring = 0x1bbcd0, --OK
+            lua_pcall = 0x1b9bd0, --ok
+            lua_pushcclosure = 0x1b8cc0, --OK
+            lua_tolstring = 0x1b8230, --OK
+            lua_pushstring = 0x1B8B00, --OK
+        },
+        libc_addrofs = {
+            calloc = 0x4d160, --OK
+            memcpy = 0x42410,--OK
+            setjmp = 0xb0450,--OK
+            longjmp = 0xb04a0,--OK
+            strerror = 0x36690,--OK
+            error = 0x168, --OK
+            sceKernelGetModuleInfoFromAddr = 0x198, --OK
+            gettimeofday_import = 0x1179a8, --OK
+
+            Thrd_join = 0x4c570,--OK
+            Thrd_exit = 0x4c5f0,--OK
+            Thrd_create = 0x4c770,--OK
+
+            Mtx_init = 0x4ca00, --OK
+            Mtx_lock = 0x4caa0, --OK   
+            Mtx_unlock = 0x4ca90, --OK
+
+            Atomic_fetch_add_8 = 0x37b80, ---OK
+        }
+    },
 }
+
+
