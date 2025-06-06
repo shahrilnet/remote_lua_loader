@@ -108,6 +108,11 @@ offsets = {
             gmtime = 0x31B00,
             gmtime_s = 0x287A0
         },
+        nora_princess2 = {
+            time = 0x7FBB0,
+            gmtime = 0x9730,
+            gmtime_s = 0x1600
+        },
     }
 }
 
@@ -123,7 +128,7 @@ function get_offsets(gamename)
     if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
-    if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess end 
+    if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end 
 end
 
 function time(tloc)
