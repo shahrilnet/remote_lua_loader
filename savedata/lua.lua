@@ -251,7 +251,7 @@ function lua.resolve_address()
     for k,offset in pairs(eboot_addrofs) do 
         eboot_addrofs[k] = eboot_base + offset 
     end
-
+	
     -- setup fake string that can read more memory space
     lua.setup_better_read_primitive()
 
