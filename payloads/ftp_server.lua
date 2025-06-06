@@ -103,6 +103,11 @@ offsets = {
             gmtime = 0x32150,
             gmtime_s = 0x28D80
         },
+        fuyu_kiss = {
+            time = 0xAFD30,
+            gmtime = 0x31B00,
+            gmtime_s = 0x287A0
+        },
     }
 }
 

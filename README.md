@@ -17,6 +17,7 @@ Currently this loader is specific for the following list of games:
    - Rename save9999.dat into nora_01.dat.
 10. Jinki Resurrection (CUSA25179)
 11. Jinki Resurrection Demo (CUSA25180) - Requires latest firmware to download from PSN
+12. Fuyu Kiss (CUSA29745)
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 
