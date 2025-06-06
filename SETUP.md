@@ -34,8 +34,8 @@ If you have a jailbroken PS5 with a non activated account, you can use [OffAct](
 12. Use the PS4 settings menu to export the encrypted save data to the USB drive. (`Settings -> Application Saved Data Management -> Saved Data in System Storage -> Copy to USB Storage Device`)
 
 #### PSN-Activated PS5/PS5 Slim/PS5 Pro -
-12. Make sure you're logged-in to the PSN-activated user.
-13. Connect your USB drive to the PS5/PS5 Slim/PS5 Pro.
-14. Use the PS5 settings menu to import the encrypted save data from the USB drive. (`Saved Data and Game/App Settings -> Saved Data (PS4) -> Copy or Delete from USB Drive -> Select your game and import`)
-15. Run the game and check if there is a popup from lua loader.
-16. Use `send_lua.py` to send lua file to the loader.
+13. Make sure you're logged-in to the PSN-activated user.
+14. Connect your USB drive to the PS5/PS5 Slim/PS5 Pro.
+15. Use the PS5 settings menu to import the encrypted save data from the USB drive. (`Saved Data and Game/App Settings -> Saved Data (PS4) -> Copy or Delete from USB Drive -> Select your game and import`)
+16. Run the game and check if there is a popup from lua loader.
+17. Use `send_lua.py` to send lua file to the loader.
