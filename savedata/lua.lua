@@ -206,6 +206,12 @@ function lua.resolve_game(luaB_auxwrap)
         libc_addrofs = gadget_table.fuyu_kiss.libc_addrofs
         gadgets = gadget_table.fuyu_kiss.gadgets
     end
+    elseif game_name == "NoraPrincess2" then
+        print("[+] Game identified as CUSA13586 Nora Princess and Stray Cat Heart HD 2")
+        eboot_addrofs = gadget_table.nora_princess2.eboot_addrofs
+        libc_addrofs = gadget_table.nora_princess2.libc_addrofs
+        gadgets = gadget_table.nora_princess2.gadgets
+    end
 end
 
 function lua.resolve_address()

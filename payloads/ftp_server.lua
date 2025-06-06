@@ -123,6 +123,7 @@ function get_offsets(gamename)
     if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
+    if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess end 
 end
 
 function time(tloc)
