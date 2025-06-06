@@ -102,10 +102,13 @@ function lua.create_str_hacky(data)
     return str, addr
 end
 
+str_hacky_list = {}
+
 function lua.create_str(str)
     local addr = lua.addrof(str)
     if not addr then
         str, addr = lua.create_str_hacky(str)
+        table.insert(str_hacky_list, str)  -- prevent gc from freeing hacky str too soon
     end
     return str, addr+24
 end
