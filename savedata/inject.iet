@@ -1,20 +1,12 @@
-*top
+*inject
 
 [save file="save9999.dat"]
-
-[debug mode="1" level="3"]
-
 [lua]
-function include_lua(engine)
-	e = engine
-	e:include("/savedata0/main.lua")
+function include_lua()
+	e:include(e:var("s.savepath").."/main.lua")
 end
 [/lua]
-
-//voodoo fix to prevent crash when using new saveg.dat
-[wait time=3000]
 
 [calllua function="include_lua"]
 
 [return]
-
