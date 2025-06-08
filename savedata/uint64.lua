@@ -129,12 +129,29 @@ function uint64:__sub(v)
     return uint64({h = (h + 2^32) % 2^32, l = (l + 2^32) % 2^32})
 end
 
+function full_product32(a, b)
+    local al, ah = a % 2^16, math.floor(a / 2^16)
+    local bl, bh = b % 2^16, math.floor(b / 2^16)
+    -- products of 16-bit parts (each fits in < 2^32)
+    local p0 = al * bl -- 0-31 bits
+    local p1 = al * bh -- 16-47 bits
+    local p2 = ah * bl -- 16-47 bits
+    local p3 = ah * bh -- 32-63 bits
+    local mid = math.floor(p0 / 2^16) + p1 + p2
+    local low = (p0 % 2^16) + (mid % 2^16) * 2^16
+    local high = p3 + math.floor(mid / 2^16)
+    return high, low
+end
+
 function uint64:__mul(v)
     v = uint64(v)
     local ah, al, bh, bl = self.h, self.l, v.h, v.l
-    local h = ah * bl + al * bh
-    local l = al * bl
-    return uint64({h = (h + bit32.rshift(l, 32)) % 2^32, l = l % 2^32})
+    local p0_h, p0_l = full_product32(al, bl)
+    local _, p1_l = full_product32(al, bh)
+    local _, p2_l = full_product32(ah, bl)
+    local low = p0_l
+    local high = (p0_h + p1_l + p2_l) % 2^32
+    return uint64({h = high, l = low})
 end
 
 function uint64:divmod(v)
