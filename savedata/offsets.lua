@@ -1,16 +1,34 @@
 
+-- Game identification via the last "nibble" of `luaB_auxwrap`.
 games_identification = {
     [0xbb0] = "RaspberryCube",
     [0xb90] = "Aibeya",
-    [0x170] = "Aikagi2",
+    [0x170] = "Aikagi2",  -- Family: [F]
     [0x420] = "HamidashiCreative",
     [0x5d0] = "AikagiKimiIsshoniPack",
     [0x280] = "C",
     [0x600] = "E",
     [0xd80] = "IxSHETell",
-    [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD,
+    [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD
     [0xb10] = "JinkiResurrection", -- CUSA25179
     [0x410] = "FuyuKiss",
+    [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
+}
+
+--[[
+Game identification as a tie breaker via a CRC32 hash of the first 0xFF bytes of libc
+in the event where game identification via `luaB_auxwrap` is not sufficient.
+i.e. Some games have the same eboot but have different libc libraries.
+In the event of a clash:
+  - Add `clash = 0x1` to libc_addrofs for the parent game.
+    - i.e. a game present in `games_identification` above.
+  - Add `libc_addrofs` offsets for affected games to the `gadget_table`.
+  - Add affected games to `lua.resolve_libc_clash_game_by_name`.
+The CRC32 should give the same result as Python zlib's CRC32 implementation.
+]]
+libc_identification = {
+    [0x8e236ee4] = "Aikagi2", -- Family: [F]
+    [0xf987a2bc] = "F",
 }
 
 gadget_table = {
@@ -62,7 +80,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1a7bb0, -- to resolve eboot base
-            longjmp_import = 0x619388, -- to resolve libc base
+            strerror_import = 0x619440, -- to resolve libc base
 
             luaL_optinteger = 0x1a5590,
             luaL_checklstring = 0x1a5180,
@@ -147,7 +165,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1aeb90, -- to resolve eboot base
-            longjmp_import = 0x6193e8, -- to resolve libc base
+            strerror_import = 0x6194A0, -- to resolve libc base
 
             luaL_optinteger = 0x1ac580,
             luaL_checklstring = 0x1ac170,
@@ -235,7 +253,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1ad170, -- to resolve eboot base
-            longjmp_import = 0x619160, -- to resolve libc base
+            strerror_import = 0x619218, -- to resolve libc base
             
             luaL_optinteger = 0x1aaba0,
             luaL_checklstring = 0x1aa790,
@@ -252,6 +270,7 @@ gadget_table = {
             lua_pushstring = 0x1a8910,
         },
         libc_addrofs = {
+            clash = 0x1,
             calloc = 0x4e910,
             memcpy = 0x44150,
             setjmp = 0xb35f0,
@@ -323,7 +342,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1a7420, -- to resolve eboot base
-            longjmp_import = 0x6168c0, -- to resolve libc base
+            strerror_import = 0x616978, -- to resolve libc base
 
             luaL_optinteger = 0x1a4d80,
             luaL_checklstring = 0x1a4970,
@@ -409,7 +428,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1a75d0, -- to resolve eboot base
-            longjmp_import = 0x619388, -- to resolve libc base
+            strerror_import = 0x619440, -- to resolve libc base
 
             luaL_optinteger = 0x1a4fb0,
             luaL_checklstring = 0x1a4ba0,
@@ -496,7 +515,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x195280, -- to resolve eboot base
-            longjmp_import = 0x4caf88, -- to resolve libc base
+            strerror_import = 0x4CB040, -- to resolve libc base
 
             luaL_optinteger = 0x192cc0,
             luaL_checklstring = 0x1928b0,
@@ -582,7 +601,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x4d8164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x19f600, -- to resolve eboot base
-            longjmp_import = 0x4f3ac0, -- to resolve libc base
+            strerror_import = 0x4F3B78, -- to resolve libc base
 
             luaL_optinteger = 0x19d010,
             luaL_checklstring = 0x19cc00,
@@ -668,7 +687,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1aed80, -- to resolve eboot base
-            longjmp_import = 0x6193e8, -- to resolve libc base
+            strerror_import = 0x6194A0, -- to resolve libc base
 
             luaL_optinteger = 0x1ac770,
             luaL_checklstring = 0x1ac360,
@@ -762,7 +781,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x4D8164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1A0660, -- to resolve eboot base
-            longjmp_import = 0x4F3C68, -- to resolve libc base
+            strerror_import = 0x4F3D20, -- to resolve libc base
 
             luaL_optinteger = 0x19E040,
             luaL_checklstring = 0x19DC30,
@@ -856,7 +875,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1BBB10, -- to resolve eboot base
-            longjmp_import = 0x61B018, -- to resolve libc base
+            strerror_import = 0x61B0C0, -- to resolve libc base
 
             luaL_optinteger = 0x1B94B0,
             luaL_checklstring = 0x1B90A0,
@@ -944,7 +963,7 @@ gadget_table = {
         eboot_addrofs = {
             fake_string = 0x600184, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x1bd410, -- to resolve eboot base
-            longjmp_import = 0x61c658, -- to resolve libc base
+            strerror_import = 0x61C700, -- to resolve libc base
             
             luaL_optinteger = 0x1bad80,
             luaL_checklstring = 0x1ba970,
@@ -978,6 +997,123 @@ gadget_table = {
             Mtx_unlock = 0x4ca90,
             
             Atomic_fetch_add_8 = 0x37b80,
+        }
+    },
+    nora_princess2 = {
+        gadgets = {
+            ["ret"] = 0x4c,
+
+            ["pop rsp; ret"] = 0xa42,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0xa32,
+            ["pop rbx; ret"] = 0xd17a5,
+            ["pop rcx; ret"] = 0xd32,
+            ["pop rdx; ret"] = 0x2e1a32,
+            ["pop rdi; ret"] = 0xc608d,
+            ["pop rsi; ret"] = 0x785e2,
+            ["pop r8; ret"] = 0xa31,
+
+            ["mov r9, rbx; call [rax + 8]"] = 0x1508d0,
+            -- or
+            ["pop r13; pop r14; pop r15; ret"] = 0x1151c3,
+            ["mov r9, r13; call [rax + 8]"] = 0x13bad4,
+
+            ["mov [rax + 8], rcx; ret"] = 0x13ba5a,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14eb2f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd577e,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11c172,
+            ["add rax, r8; ret"] = 0xac83,
+
+            ["mov [rdi], rsi; ret"] = 0xd594f,
+            ["mov [rdi], rax; ret"] = 0x97f5b,
+            ["mov [rdi], eax; ret"] = nil,
+
+            ["add [rbx], eax; ret"] = 0x426c1f,
+            -- or
+            ["add [rbx], ecx; ret"] = nil,
+            -- or
+            ["add [rbx], edi; ret"] = 0x404e33,
+
+            ["mov rax, [rax]; ret"] = 0x2075b,
+            ["inc dword [rax]; ret"] = 0x19a9fb,
+
+            -- branching specific gadgets
+            ["cmp [rax], ebx; ret"] = 0x407328,
+            ["sete al; ret"] = 0x5e765,
+            ["setne al; ret"] = 0x573,
+            ["seta al; ret"] = 0x16cd2e,
+            ["setb al; ret"] = 0x5e784,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xcfc5a,
+            ["shl rax, cl; ret"] = 0xda1d1,
+            ["add rax, rcx; ret"] = 0x36a6e,
+
+            stack_pivot = {
+                ["mov esp, 0xfb0000bd; ret"] = 0x3b5824, -- crash handler
+                ["mov esp, 0xf00000b9; ret"] = 0x3bb56c, -- native handler
+            }
+        },
+        eboot_addrofs = {
+            fake_string = 0x4D8164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x1A12E0, -- to resolve eboot base
+            strerror_import = 0x4F3D60, -- to resolve libc base
+
+            luaL_optinteger = 0x19ECC0,
+            luaL_checklstring = 0x19E8B0,
+            lua_pushlstring = 0x19C9A0,
+            lua_pushinteger = 0x19C980,
+
+            luaL_newstate = 0x19FC10,
+            luaL_openlibs = 0x1A9C60,
+            lua_setfield = 0x19D460,
+            luaL_loadstring = 0x19FBA0,
+            lua_pcall = 0x19DB00,
+            lua_pushcclosure = 0x19CBB0,
+            lua_tolstring = 0x19C0B0,
+            lua_pushstring = 0x19CA00,
+        },
+        libc_addrofs = {
+            calloc = 0x22A90,
+            memcpy = 0x18B90,
+            setjmp = 0x802A0,
+            longjmp = 0x802F0,
+            strerror = 0xCF70,
+            error = 0x138,
+            sceKernelGetModuleInfoFromAddr = 0x568,
+            gettimeofday_import = 0xEFE20, -- syscall wrapper
+
+            Thrd_join = 0x21F00,
+            Thrd_exit = 0x21F80,
+            Thrd_create = 0x22090,
+
+            Mtx_init = 0x22320,
+            Mtx_lock = 0x223B0,
+            Mtx_unlock = 0x223A0,
+
+            Atomic_fetch_add_8 = 0xE380,
+        }
+    },
+    -- Games with clashes below here, only libc offsets are required.
+    f = {  -- Clashes with Aikagi2
+        libc_addrofs = {
+            calloc = 0x4E910,
+            memcpy = 0x44150,
+            setjmp = 0xB2D60,
+            longjmp = 0xB2DB0,
+            strerror = 0x38340,
+            error = 0x168,
+            sceKernelGetModuleInfoFromAddr = 0x198,
+            gettimeofday_import = 0x11BA78, -- syscall wrapper
+
+            Thrd_join = 0x4DD20,
+            Thrd_exit = 0x4DDA0,
+            Thrd_create = 0x4DF20,
+
+            Mtx_init = 0x4E1A0,
+            Mtx_lock = 0x4E230,
+            Mtx_unlock = 0x4E220,
+
+            Atomic_fetch_add_8 = 0x39800,
         }
     },
 }
