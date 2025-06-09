@@ -208,6 +208,26 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.fuyu_kiss.eboot_addrofs
         libc_addrofs = gadget_table.fuyu_kiss.libc_addrofs
         gadgets = gadget_table.fuyu_kiss.gadgets
+    elseif game_name == "NoraPrincess2" then
+        print("[+] Game identified as CUSA13586 Nora Princess and Crying Cat")
+        eboot_addrofs = gadget_table.nora_princess2.eboot_addrofs
+        libc_addrofs = gadget_table.nora_princess2.libc_addrofs
+        gadgets = gadget_table.nora_princess2.gadgets
+    elseif game_name == "F" then
+        print("[+] Game identified as F")
+        eboot_addrofs = gadget_table.f.eboot_addrofs
+        libc_addrofs = gadget_table.f.libc_addrofs
+        gadgets = gadget_table.f.gadgets
+    end
+end
+
+function lua.resolve_libc_clash_game_by_name(game_name)
+    if game_name == "Aikagi2" then
+        print("[+] Game reidentified as Aikagi 2")
+        libc_addrofs = gadget_table.aikagi_2.libc_addrofs
+    elseif game_name == "F" then
+        print("[+] Game reidentified as F")
+        libc_addrofs = gadget_table.f.libc_addrofs
     end
 end
 
@@ -237,6 +257,7 @@ function lua.resolve_address()
     lua.resolve_game(luaB_auxwrap)
     
     eboot_base = luaB_auxwrap - eboot_addrofs.luaB_auxwrap
+
     print("[+] eboot base @ " .. hex(eboot_base))
 
     -- resolve offsets to their address
@@ -264,9 +285,26 @@ function lua.resolve_address()
     lua.setup_better_read_primitive()
 
     -- resolve libc
-    libc_base = memory.read_qword(eboot_addrofs.longjmp_import) - libc_addrofs.longjmp
+    libc_base = memory.read_qword(eboot_addrofs.strerror_import) - libc_addrofs.strerror
     print("[+] libc base @ " .. hex(libc_base))
-    
+
+    -- calculate libc hash, can be changed to hashing higher addresses if needed later.
+    local byte_array = memory.read_buffer(libc_base, 0xFF)
+    local hash = crc32(byte_array)
+    print("[+] libc hash @ " .. hex(hash))
+
+    -- resolve clashes if any
+    if libc_addrofs.clash and libc_addrofs.clash == 0x1 then
+        print("[+] detected clash, resolving...")
+        local orig_game_name = game_name
+        game_name = libc_identification[hash]
+        if game_name then
+            lua.resolve_libc_clash_game_by_name(game_name)
+        else
+            errorf("unsupported game (libc hash: %s for parent %s)", hex(hash), orig_game_name)
+        end
+    end
+
     for k,offset in pairs(libc_addrofs) do 
         libc_addrofs[k] = libc_base + offset 
     end
