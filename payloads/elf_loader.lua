@@ -229,7 +229,6 @@ function main()
     syscall.resolve({
         jitshm_create = 0x215,
         jitshm_alias = 0x216,
-        mprotect = 0x4a,
     })
 
     run_with_ps5_syscall_enabled(function()
