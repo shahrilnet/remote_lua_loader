@@ -26,6 +26,7 @@ Examples:
 | -------- | ------- | ------- |
 | read_klog.lua | PS5 | Read content of `/dev/klog`. |
 | elf_loader.lua | PS5 | Rudimentary ELF loader to load from file system. By default it will try to load John Tornblom's [elfldr.elf](https://github.com/ps5-payload-dev/elfldr) shipped with savedata, or alternatively from `/data/elfldr.elf` if you need to have updated elfldr.elf (you need to place there yourself using FTP server). |
+| bin_loader.lua | PS4 | Rudimentary payload loader to load from file system. |
 
 ### send_lua.py additional options
 
