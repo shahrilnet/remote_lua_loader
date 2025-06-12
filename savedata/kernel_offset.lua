@@ -325,7 +325,7 @@ ps4_kernel_offset_list = {
         PRISON0             = 0x111fa18,
         ROOTVNODE           = 0x2136e90,
         TARGET_ID_OFFSET    = 0x21cc60d,
-        SYSENT_661_OFFSET   = 0,
+        SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x47b31
     },
     [{ "12.02" }] = { -- credit: @egycnq
