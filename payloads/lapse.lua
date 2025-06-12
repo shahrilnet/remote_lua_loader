@@ -1772,7 +1772,6 @@ function post_exploitation_ps4()
         kernel.write_dword(sysent_661_addr + 0x2c, 1)
         
         syscall.resolve({
-            stat = 0xbc,
             jitshm_create = 0x215,
             jitshm_alias = 0x216,
         })
@@ -1787,14 +1786,6 @@ function post_exploitation_ps4()
         end
         
         -- read payload from disk
-        local st = memory.alloc(120)
-        if syscall.stat(payload_path, st):tonumber() < 0 then
-            print("Failed getting payload file size")
-            return
-        end
-        local file_size = memory.read_qword(st + 72):tonumber()
-        printf("Payload file size: %d", file_size)
-
         local bin_data = file_read(payload_path)
         local bin_data_addr = lua.resolve_value(bin_data)
         printf("File read to address: 0x%x", bin_data_addr:tonumber())
@@ -1807,8 +1798,7 @@ function post_exploitation_ps4()
 
         -- map shadow mapping and write into it
         syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, write_handle, 0)
-        printf("Payload file size: %d", file_size)
-        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), file_size)
+        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), #bin_data)
 
         -- map executable segment
         syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
