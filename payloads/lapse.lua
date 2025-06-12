@@ -1752,6 +1752,55 @@ function post_exploitation_ps4()
     
         print("Sandbox escape complete ... root FS access and jail broken")
     end
+
+    function apply_kernel_kpatches_ps4(kbase)
+        local sysent_661_addr = kbase + 0x1107f00
+        local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
+        local sy_call = kernel.read_qword(sysent_661_addr + 8):tonumber()
+        local sy_thrcnt = kernel.read_dword(sysent_661_addr + 0x2c):tonumber()
+
+        kernel.write_dword(sysent_661_addr, 6)
+        kernel.write_qword(sysent_661_addr + 8, kbase + 0x4c7ad)
+        kernel.write_dword(sysent_661_addr + 0x2c, 1)
+        
+        syscall.resolve({
+            jitshm_create = 0x215,
+            jitshm_alias = 0x216,
+        })
+        
+        local PROT_RW = bit32.bor(PROT_READ, PROT_WRITE)
+        local PROT_RWX = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
+        local aligned_memsz = 0x10000
+        
+        -- read payload from disk
+        local bin_data = file_read("/data/900.bin")
+        local bin_data_addr = lua.resolve_value(bin_data)
+        printf("File read to address: 0x%x", bin_data_addr:tonumber())
+        
+        -- create shm with exec permission
+        local exec_handle = syscall.jitshm_create(0, aligned_memsz, 0x7)
+
+        -- create shm alias with write permission
+        local write_handle = syscall.jitshm_alias(exec_handle, 0x3)
+
+        -- map shadow mapping and write into it
+        syscall.mmap(uint64(0x920100000), aligned_memsz, PROT_RW, 0x11, write_handle, 0)
+        memory.memcpy(uint64(0x920100000), bin_data_addr:tonumber(), 225)
+
+        -- map executable segment
+        syscall.mmap(uint64(0x926100000), aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
+        printf("First bytes: 0x%x", memory.read_dword(uint64(0x926100000)):tonumber())
+        
+        -- execute payload
+        -- native.fcall(uint64(0x926100000))
+        syscall.kexec(uint64(0x926100000))
+        
+        print("After kexec")
+        
+        kernel.write_dword(sysent_661_addr + 0x2c, sy_thrcnt)
+        kernel.write_qword(sysent_661_addr + 8, sy_call)
+        kernel.write_dword(sysent_661_addr, sy_narg)
+    end
     
     -- Run post-exploit logic
     local proc = kernel.addr.curproc
@@ -1759,6 +1808,7 @@ function post_exploitation_ps4()
     printf("Kernel Base Candidate: %s", hex(kbase))
     verify_elf_header(kbase)
     escape_sandbox(kbase, proc)
+    apply_kernel_kpatches_ps4(kbase)
 end
 
 
