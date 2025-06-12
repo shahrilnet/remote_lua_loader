@@ -27,7 +27,7 @@ function bin_loader:parse()
     local MAP_COMBINED = bit32.bor(MAP_PRIVATE, MAP_ANONYMOUS)
     local PROT_COMBINED = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
 
-    local ret = syscall.mmap(0, 0x60000, PROT_COMBINED, MAP_COMBINED, -1 ,0)
+    local ret = syscall.mmap(0, 0x100000, PROT_COMBINED, MAP_COMBINED, -1 ,0)
     if ret:tonumber() < 0 then
         error("mmap() error: " .. get_error_string())
     end
