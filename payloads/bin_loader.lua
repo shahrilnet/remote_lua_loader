@@ -1,4 +1,22 @@
-function main()
+bin_loader = {}
+bin_loader.__index = bin_loader
+
+function bin_loader:load_from_file(filepath)
+
+    if not file_exists(filepath) then
+        errorf("file not exist: %s", filepath)
+    end
+
+    local self = setmetatable({}, bin_loader)
+    
+    self.filepath = filepath
+    self.bin_data = file_read(filepath)
+    self.parse(self)
+    
+    return self
+end
+
+function bin_loader:parse()
     if PLATFORM ~= "ps4" then
         error("this payload only targets ps4")
     end
@@ -13,32 +31,51 @@ function main()
     if ret:tonumber() < 0 then
         error("mmap() error: " .. get_error_string())
     end
-
-    printf("mmap() allocated at address: 0x%x", ret:tonumber())
-
-    -- read payload from disk
-    local payload_path = "/data/payload.bin"
-    if not file_exists(payload_path) then
-        errorf("file not exist: %s", payload_path)
-    end
     
-    local st = memory.alloc(120)
-    if syscall.stat(payload_path, st):tonumber() < 0 then
-        print("Failed getting payload file size")
-        return
-    end
-    local file_size = memory.read_qword(st + 72):tonumber()
+    self.bin_entry_point = ret:tonumber()
+    printf("mmap() allocated at address: 0x%x", self.bin_entry_point)
     
-    local bin_data = file_read(payload_path)
-    local bin_data_addr = lua.resolve_value(bin_data)
+    local bin_data_addr = lua.resolve_value(self.bin_data)
     printf("File read to address: 0x%x", bin_data_addr:tonumber())
 
     -- copy payload to executable area
-    memory.memcpy(ret:tonumber(), bin_data_addr:tonumber(), file_size)
-    printf("First bytes: 0x%x", memory.read_dword(ret:tonumber()):tonumber())
+    memory.memcpy(self.bin_entry_point, bin_data_addr:tonumber(), #self.bin_data)
+    printf("First bytes: 0x%x", memory.read_dword(self.bin_entry_point):tonumber())
+end
 
-    -- execute payload
-    native.fcall(ret:tonumber())
+function bin_loader:run()
+
+    local Thrd_create = fcall(libc_addrofs.Thrd_create)
+
+    local thr_handle_addr = memory.alloc(8)
+
+    printf("spawning %s", self.filepath)
+
+    -- spawn elf in new thread
+    local ret = Thrd_create(thr_handle_addr, self.bin_entry_point):tonumber()
+    if ret ~= 0 then
+        error("Thrd_create() error: " .. hex(ret))
+    end
+
+    self.thr_handle = memory.read_qword(thr_handle_addr)
+end
+
+function main()
+    local payload_data_path = "/data/payload.bin"
+    local payload_savedata_path = string.format("/mnt/sandbox/%s_000/savedata0/payload.bin", get_title_id())
+
+    local existing_path = ""
+    if file_exists(payload_data_path) then
+        existing_path = payload_data_path
+    elseif file_exists(payload_savedata_path) then
+        existing_path = payload_savedata_path
+    else
+        errorf("file not exist: %s", existing_path)
+    end
+    printf("loading payload from: %s", existing_path)
+
+    local elf = bin_loader:load_from_file(existing_path)
+    elf:run()
 end
 
 main()
