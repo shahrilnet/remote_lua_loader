@@ -1754,6 +1754,9 @@ function post_exploitation_ps4()
     end
 
     function apply_kernel_kpatches_ps4(kbase)
+        kernel.write_qword(p_ucred + 0x60, -1)
+        kernel.write_qword(p_ucred + 0x68, -1)
+        
         local sysent_661_addr = kbase + 0x1107f00
         local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
         local sy_call = kernel.read_qword(sysent_661_addr + 8):tonumber()
