@@ -256,8 +256,24 @@ ps5_kernel_offset_list = {
 }
 
 ps4_kernel_offset_list = {
-
-    
+    [{ "9.00" }] = {    
+        EVF_OFFSET          = 0x7f6f27,
+        PRISON0             = 0x111f870,
+        ROOTVNODE           = 0x21eff20,
+        TARGET_ID_OFFSET    = 0x221688d
+    },
+    [{ "11.00" }] = {
+        EVF_OFFSET          = 0x7fc26f,
+        PRISON0             = 0x111f830,
+        ROOTVNODE           = 0x2116640,
+        TARGET_ID_OFFSET    = 0x221c60d
+    },
+    [{ "12.02" }] = {
+        EVF_OFFSET          = 0x784798,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d
+    }
 }
 
 function get_ps5_kernel_offset()
