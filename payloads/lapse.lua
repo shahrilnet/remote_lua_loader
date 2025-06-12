@@ -1772,28 +1772,43 @@ function post_exploitation_ps4()
         kernel.write_dword(sysent_661_addr + 0x2c, 1)
         
         syscall.resolve({
+            stat = 0xbc,
             jitshm_create = 0x215,
             jitshm_alias = 0x216,
         })
         
         local PROT_RW = bit32.bor(PROT_READ, PROT_WRITE)
         local PROT_RWX = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
+        
         local aligned_memsz = 0x10000
+        local payload_path = "/data/900.bin"
+        if not file_exists(payload_path) then
+            errorf("file not exist: %s", payload_path)
+        end
         
         -- read payload from disk
-        local bin_data = file_read("/data/900.bin")
+        local st = memory.alloc(120)
+        if syscall.stat(payload_path, st):tonumber() < 0 then
+            print("Failed getting payload file size")
+            return
+        end
+        local file_size = memory.read_qword(st + 72):tonumber()
+        printf("Payload file size: %d", file_size)
+
+        local bin_data = file_read(payload_path)
         local bin_data_addr = lua.resolve_value(bin_data)
         printf("File read to address: 0x%x", bin_data_addr:tonumber())
         
         -- create shm with exec permission
-        local exec_handle = syscall.jitshm_create(0, aligned_memsz, 0x7)
+        local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
 
         -- create shm alias with write permission
-        local write_handle = syscall.jitshm_alias(exec_handle, 0x3)
+        local write_handle = syscall.jitshm_alias(exec_handle, PROT_RW)
 
         -- map shadow mapping and write into it
         syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, write_handle, 0)
-        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), 225)
+        printf("Payload file size: %d", file_size)
+        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), file_size)
 
         -- map executable segment
         syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
