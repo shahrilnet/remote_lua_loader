@@ -1759,7 +1759,7 @@ function post_exploitation_ps4()
     end
 
     function apply_patches_to_kernel_data_ps4(kbase)
-        local mtttg_addr = uint64(0x920100000)
+        local mapping_addr = uint64(0x920100000)
         local shadow_mapping_addr = uint64(0x926100000)
         
         local sysent_661_addr = kbase + 0x1107f00
