@@ -301,8 +301,8 @@ ps4_kernel_offset_list = {
         PRISON0             = 0x111f830,
         ROOTVNODE           = 0x2116640,
         TARGET_ID_OFFSET    = 0x221c60d,
-        SYSENT_661_OFFSET   = 0,
-        JMP_RSI_GADGET      = 0
+        SYSENT_661_OFFSET   = 0x1109350,
+        JMP_RSI_GADGET      = 0x71a21
     },
     [{ "11.02" }] = { -- Untested
         EVF_OFFSET          = 0x7fc22f,
@@ -320,21 +320,13 @@ ps4_kernel_offset_list = {
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x704d5
     },
-    [{ "12.00" }] = { -- Untested
+    [{ "12.00", "12.02" }] = { -- credit: @egycnq
         EVF_OFFSET          = 0x784798,
         PRISON0             = 0x111fa18,
         ROOTVNODE           = 0x2136e90,
         TARGET_ID_OFFSET    = 0x21cc60d,
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x47b31
-    },
-    [{ "12.02" }] = { -- credit: @egycnq
-        EVF_OFFSET          = 0x784798,
-        PRISON0             = 0x111fa18,
-        ROOTVNODE           = 0x2136e90,
-        TARGET_ID_OFFSET    = 0x21cc60d,
-        SYSENT_661_OFFSET   = 0,
-        JMP_RSI_GADGET      = 0
     }
 }
 
