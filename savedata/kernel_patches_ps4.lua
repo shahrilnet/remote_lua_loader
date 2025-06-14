@@ -1,3 +1,26 @@
+--[[
+    Copyright (C) 2025 anonymous
+
+    This file 'kernel_patches_ps4.lua' contains a derivative work
+    of the PS4 kernel patches shellcodes, which originally are a part of PSFree.
+    
+    Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/psfree-1.5rc1.7z
+    Modified Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/ps4-kpatches-src.7z
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
 local shellcode_900 = ""
 
 local shellcode_903 = ""
