@@ -3,7 +3,8 @@
 
     This file 'kernel_patches_ps4.lua' contains a derivative work
     of the PS4 kernel patches shellcodes, which originally are a part of PSFree.
-    
+
+    Based on the kernel patches of: TheFlow, ChendoChap, abc, AlAzif and LightningMods.
     Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/psfree-1.5rc1.7z
     Modified Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/ps4-kpatches-src.7z
 
