@@ -60,6 +60,21 @@ function bin_loader:run()
     self.thr_handle = memory.read_qword(thr_handle_addr)
 end
 
+function bin_loader:wait_for_payload_to_exit()
+
+    local Thrd_join = fcall(libc_addrofs.Thrd_join)
+
+    -- will block until elf terminates
+    local ret = Thrd_join(self.thr_handle, 0):tonumber()
+    if ret ~= 0 then
+        error("Thrd_join() error: " .. hex(ret))
+    end
+    
+    if syscall.munmap(self.bin_entry_point, 0x100000):tonumber() < 0 then
+        error("munmap() error: " .. get_error_string())
+    end
+end
+
 function main()
     local payload_data_path = "/data/payload.bin"
     local payload_savedata_path = string.format("/mnt/sandbox/%s_000/savedata0/payload.bin", get_title_id())
@@ -74,8 +89,9 @@ function main()
     end
     printf("loading payload from: %s", existing_path)
 
-    local elf = bin_loader:load_from_file(existing_path)
-    elf:run()
+    local bin = bin_loader:load_from_file(existing_path)
+    bin:run()
+    bin:wait_for_payload_to_exit()
 end
 
 main()
