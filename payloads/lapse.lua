@@ -1762,6 +1762,8 @@ function post_exploitation_ps4()
         kernel.write_dword(sysent_661_addr + 0x2c, sy_thrcnt)
         
         syscall.close(write_handle)
+        
+        kernel.is_ps4_kpatches_applied = true
     end
     
     local function should_apply_kernel_patches()
@@ -1779,6 +1781,7 @@ function post_exploitation_ps4()
     end
     
     -- Run post-exploit logic
+    kernel.is_ps4_kpatches_applied = false
     local proc = kernel.addr.curproc
     calculate_kbase(evf_ptr)
     printf("Kernel Base Candidate: %s", hex(kernel.addr.data_base))
