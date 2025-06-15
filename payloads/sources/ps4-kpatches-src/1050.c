@@ -37,29 +37,29 @@ static inline void do_patch(void *kbase) {
     disable_cr0_wp();
 
     // TheFlow's patches from PPPwn
-    write16(kbase, 0xD75B7, 0x9090); // copyin 1
-    write16(kbase, 0xD75C3, 0x9090); // copyin 2
-    write8(kbase, 0xD75C5, 0x90); // copyin 2
+    write16(kbase, 0xd75b7, 0x9090); // copyin 1
+    write16(kbase, 0xd75c3, 0x9090); // copyin 2
+    write8(kbase, 0xd75c5, 0x90); // copyin 2
 
-    write16(kbase, 0xD74C2, 0x9090); // copyout 1
-    write16(kbase, 0xD74CE, 0x9090); // copyout 2
-    write8(kbase, 0xD74D0, 0x90); // copyout 2
+    write16(kbase, 0xd74c2, 0x9090); // copyout 1
+    write16(kbase, 0xd74ce, 0x9090); // copyout 2
+    write8(kbase, 0xd74d0, 0x90); // copyout 2
 
-    write16(kbase, 0xD7A63, 0x9090); // copyinstr 1
-    write16(kbase, 0xD7A6F, 0x9090); // copyinstr 2
-    write8(kbase, 0xD7A71, 0x90); // copyinstr 2
-    write16(kbase, 0xD7AA0, 0x9090); // copyinstr 3
+    write16(kbase, 0xd7a63, 0x9090); // copyinstr 1
+    write16(kbase, 0xd7a6f, 0x9090); // copyinstr 2
+    write8(kbase, 0xd7a71, 0x90); // copyinstr 2
+    write16(kbase, 0xd7aa0, 0x9090); // copyinstr 3
 
     // ChendoChap's patches from pOOBs4
-    write16(kbase, 0x627DB4, 0x9090); // veriPatch
+    write16(kbase, 0x627db4, 0x9090); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
-    write8(kbase, 0xD72BD, 0xeb); // bzero
-    write8(kbase, 0xD7301, 0xeb); // pagezero
-    write8(kbase, 0xD737D, 0xeb); // memcpy
-    write8(kbase, 0xD73C1, 0xeb); // pagecopy
-    write8(kbase, 0xD756D, 0xeb); // copyin
-    write8(kbase, 0xD7A1D, 0xeb); // copyinstr
-    write8(kbase, 0xD7AED, 0xeb); // copystr
+    write8(kbase, 0xd72bd, 0xeb); // bzero
+    write8(kbase, 0xd7301, 0xeb); // pagezero
+    write8(kbase, 0xd737d, 0xeb); // memcpy
+    write8(kbase, 0xd73c1, 0xeb); // pagecopy
+    write8(kbase, 0xd756d, 0xeb); // copyin
+    write8(kbase, 0xd7a1d, 0xeb); // copyinstr
+    write8(kbase, 0xd7aed, 0xeb); // copystr
 
     // patch amd64_syscall() to allow calling syscalls everywhere
     // struct syscall_args sa; // initialized already
@@ -104,7 +104,7 @@ static inline void do_patch(void *kbase) {
     // call priv_check_cred(oldcred, PRIV_CRED_SETUID, 0)
     // test eax, eax
     // je ... ; patch je to jmp
-    write8(kbase, 0x8C1C6, 0xeb);
+    write8(kbase, 0x8c1c6, 0xeb);
 
     // patch vm_map_protect() (called by sys_mprotect()) to allow rwx mappings
     //
@@ -114,17 +114,17 @@ static inline void do_patch(void *kbase) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x47B2EE, 0);
+    write32(kbase, 0x47b2ee, 0);
 
     // TODO: Description of this patch. patch sys_dynlib_load_prx()
-    write16(kbase, 0x212AD4, 0xe990);
+    write16(kbase, 0x212ad4, 0xe990);
 
     // patch sys_dynlib_dlsym() to allow dynamic symbol resolution everywhere
     // call    ...
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x213088, 0xeb);
+    write32(kbase, 0x213088, 0x013ce990);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
@@ -139,7 +139,7 @@ static inline void do_patch(void *kbase) {
     //     push    rbp
     //     mov     rbp, rsp
     //     ...
-    write32(kbase, 0x2DAB60, 0xc3c03148);
+    write32(kbase, 0x2dab60, 0xc3c03148);
 
     // patch sys_mmap() to allow rwx mappings
     // patch maximum cpu mem protection: 0x33 -> 0x37
@@ -147,8 +147,8 @@ static inline void do_patch(void *kbase) {
     // GPU X: 0x8 R: 0x10 W: 0x20
     // that's why you see other bits set
     // ref: https://cturt.github.io/ps4-2.html
-    write8(kbase, 0x19C42A, 0x37);
-    write8(kbase, 0x19C42D, 0x37);
+    write8(kbase, 0x19c42a, 0x37);
+    write8(kbase, 0x19c42d, 0x37);
 
     // overwrite the entry of syscall 11 (unimplemented) in sysent
     //
@@ -164,7 +164,7 @@ static inline void do_patch(void *kbase) {
     // int sys_kexec(struct thread td, struct args *uap) {
     //     asm("jmp qword ptr [rsi]");
     // }
-    const u64 sysent_11_off = 0x1102BD0;
+    const u64 sysent_11_off = 0x1102bd0;
     // .sy_narg = 2
     write32(kbase, sysent_11_off, 2);
     // .sy_call = gadgets['jmp qword ptr [rsi]']

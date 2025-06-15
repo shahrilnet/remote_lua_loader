@@ -51,14 +51,12 @@ static inline void do_patch(void *kbase) {
     write16(kbase, 0x2bdbb0, 0x9090); // copyinstr 3
 
     // LightningMods's additional dlsym patches from PPPwn
-    write16(kbase, 0x1b76a3, 0x9090);     // NOP check 1
-    write32(kbase, 0x1b76a5, 0x90909090);
-    write16(kbase, 0x1b76b3, 0x9090);     // NOP check 2
-    write32(kbase, 0x1b76b5, 0x90909090);
-    write16(kbase, 0x1b76d3, 0xE990);     // NOP + JMP
+    write16(kbase, 0x1b76a3, 0x04eb); // skip check 1
+    write16(kbase, 0x1b76b3, 0x04eb); // skip check 2
+    write16(kbase, 0x1b76d3, 0xe990); // nop + jmp
 
     // ChendoChap's patches from pOOBs4
-    write16(kbase, 0x627AF4, 0x9090); // veriPatch
+    write16(kbase, 0x627af4, 0x9090); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
     write8(kbase, 0x2bd3cd, 0xeb); // bzero
     write8(kbase, 0x2bd411, 0xeb); // pagezero
@@ -111,7 +109,7 @@ static inline void do_patch(void *kbase) {
     // call priv_check_cred(oldcred, PRIV_CRED_SETUID, 0)
     // test eax, eax
     // je ... ; patch je to jmp
-    write8(kbase, 0x3914E6, 0xeb);
+    write8(kbase, 0x3914e6, 0xeb);
 
     // patch vm_map_protect() (called by sys_mprotect()) to allow rwx mappings
     //
@@ -121,17 +119,17 @@ static inline void do_patch(void *kbase) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x2FC0EC, 0);
+    write32(kbase, 0x2fc0ee, 0);
 
     // TODO: Description of this patch. patch sys_dynlib_load_prx()
-    write16(kbase, 0x1B7164, 0xe990);
+    write16(kbase, 0x1b7164, 0xe990);
 
     // patch sys_dynlib_dlsym() to allow dynamic symbol resolution everywhere
     // call    ...
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x1B7718, 0xeb);
+    write32(kbase, 0x1b7718, 0x013ce990);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
@@ -146,7 +144,7 @@ static inline void do_patch(void *kbase) {
     //     push    rbp
     //     mov     rbp, rsp
     //     ...
-    write32(kbase, 0x3BD860, 0xc3c03148);
+    write32(kbase, 0x3bd860, 0xc3c03148);
 
     // patch sys_mmap() to allow rwx mappings
     // patch maximum cpu mem protection: 0x33 -> 0x37
@@ -154,8 +152,8 @@ static inline void do_patch(void *kbase) {
     // GPU X: 0x8 R: 0x10 W: 0x20
     // that's why you see other bits set
     // ref: https://cturt.github.io/ps4-2.html
-    write8(kbase, 0x1FA71A, 0x37);
-    write8(kbase, 0x1FA71D, 0x37);
+    write8(kbase, 0x1fa71a, 0x37);
+    write8(kbase, 0x1fa71d, 0x37);
 
     // overwrite the entry of syscall 11 (unimplemented) in sysent
     //
@@ -171,7 +169,7 @@ static inline void do_patch(void *kbase) {
     // int sys_kexec(struct thread td, struct args *uap) {
     //     asm("jmp qword ptr [rsi]");
     // }
-    const u64 sysent_11_off = 0x1102D80;
+    const u64 sysent_11_off = 0x1102d80;
     // .sy_narg = 2
     write32(kbase, sysent_11_off, 2);
     // .sy_call = gadgets['jmp qword ptr [rsi]']

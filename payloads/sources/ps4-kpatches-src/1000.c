@@ -114,17 +114,17 @@ static inline void do_patch(void *kbase) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x39207D, 0);
+    write32(kbase, 0x39207d, 0);
 
     // TODO: Description of this patch. patch sys_dynlib_load_prx()
-    write16(kbase, 0x18FAA4, 0xe990);
+    write16(kbase, 0x18faa4, 0xe990);
 
     // patch sys_dynlib_dlsym() to allow dynamic symbol resolution everywhere
     // call    ...
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x19025F, 0xeb);
+    write8(kbase, 0x19025f, 0xeb);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
@@ -139,7 +139,7 @@ static inline void do_patch(void *kbase) {
     //     push    rbp
     //     mov     rbp, rsp
     //     ...
-    write32(kbase, 0x1BEA40, 0xc3c03148);
+    write32(kbase, 0x1bea40, 0xc3c03148);
 
     // patch sys_mmap() to allow rwx mappings
     // patch maximum cpu mem protection: 0x33 -> 0x37
@@ -147,8 +147,8 @@ static inline void do_patch(void *kbase) {
     // GPU X: 0x8 R: 0x10 W: 0x20
     // that's why you see other bits set
     // ref: https://cturt.github.io/ps4-2.html
-    write8(kbase, 0xED59A, 0x37);
-    write8(kbase, 0xED59D, 0x37);
+    write8(kbase, 0xed59a, 0x37);
+    write8(kbase, 0xed59d, 0x37);
 
     // overwrite the entry of syscall 11 (unimplemented) in sysent
     //
@@ -164,7 +164,7 @@ static inline void do_patch(void *kbase) {
     // int sys_kexec(struct thread td, struct args *uap) {
     //     asm("jmp qword ptr [rsi]");
     // }
-    const u64 sysent_11_off = 0x1102FA0;
+    const u64 sysent_11_off = 0x1102fa0;
     // .sy_narg = 2
     write32(kbase, sysent_11_off, 2);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
