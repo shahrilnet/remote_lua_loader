@@ -426,8 +426,6 @@ end
 
 function ftp_send_list()
     local st = memory.alloc(120)
-    local curtime = memory.alloc(4)
-    local curtm = memory.alloc(36)
 
     if sceStat(ftp.client.cur_path, st) < 0 then
         ftp_send_ctrl_msg(string.format("550 Invalid directory. Got %s\r\n", ftp.client.cur_path))
@@ -445,9 +443,6 @@ function ftp_send_list()
 
     ftp_send_ctrl_msg("150 Opening ASCII mode data transfer for LIST.\r\n")
     ftp_open_data_conn()
-
-    time(curtime)
-    gmtime_s(curtime, curtm)
 
     while true do
         local nread = sceGetdents(fd, contents, 4096)
