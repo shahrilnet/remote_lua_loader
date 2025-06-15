@@ -51,10 +51,8 @@ static inline void do_patch(void *kbase) {
     write16(kbase, 0x2bdad0, 0x9090); // copyinstr 3
 
     // LightningMods's additional dlsym patches from PPPwn
-    write16(kbase, 0x1b76a3, 0x9090);     // NOP check 1
-    write32(kbase, 0x1b76a5, 0x90909090);
-    write16(kbase, 0x1b76b3, 0x9090);     // NOP check 2
-    write32(kbase, 0x1b76b5, 0x90909090);
+    write16(kbase, 0x1b76a3, 0x04EB);     // NOP check 1
+    write16(kbase, 0x1b76b3, 0x04EB);     // NOP check 2
     write16(kbase, 0x1b76d3, 0xE990);     // NOP + JMP
 
     // ChendoChap's patches from pOOBs4
@@ -121,7 +119,7 @@ static inline void do_patch(void *kbase) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x2FBEAC, 0);
+    write32(kbase, 0x2FBEAE, 0);
 
     // TODO: Description of this patch. patch sys_dynlib_load_prx()
     write16(kbase, 0x1B7164, 0xe990);
@@ -131,7 +129,7 @@ static inline void do_patch(void *kbase) {
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x1B7718, 0xeb);
+    write16(kbase, 0x1B7718, 0x04EB);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
