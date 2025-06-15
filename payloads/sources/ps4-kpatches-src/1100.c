@@ -51,14 +51,12 @@ static inline void do_patch(void *kbase) {
     write16(kbase, 0x2de520, 0x9090); // copyinstr 3
 
     // LightningMods's additional dlsym patches from PPPwn
-    write16(kbase, 0x1e4c33, 0x9090);     // NOP check 1
-    write32(kbase, 0x1e4c35, 0x90909090);
-    write16(kbase, 0x1e4c43, 0x9090);     // NOP check 2
-    write32(kbase, 0x1e4c45, 0x90909090);
-    write16(kbase, 0x1e4c63, 0xE990);     // NOP + JMP
+    write16(kbase, 0x1e4c33, 0x04eb); // skip check 1
+    write16(kbase, 0x1e4c43, 0x04eb); // skip check 2
+    write16(kbase, 0x1e4c63, 0xe990); // no + jmp
 
     // ChendoChap's patches from pOOBs4
-    write16(kbase, 0x623F64, 0x9090); // veriPatch
+    write16(kbase, 0x623f64, 0x9090); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
     write8(kbase, 0x2ddd3d, 0xeb); // bzero
     write8(kbase, 0x2ddd81, 0xeb); // pagezero
@@ -121,17 +119,17 @@ static inline void do_patch(void *kbase) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x35C8EE, 0);
+    write32(kbase, 0x35c8ee, 0);
 
     // TODO: Description of this patch. patch sys_dynlib_load_prx()
-    write16(kbase, 0x1E46F4, 0xe990);
+    write16(kbase, 0x1e46f4, 0xe990);
 
     // patch sys_dynlib_dlsym() to allow dynamic symbol resolution everywhere
     // call    ...
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x1E4CA8, 0xeb);
+    write32(kbase, 0x1e4ca8, 0x013ce990);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
@@ -146,7 +144,7 @@ static inline void do_patch(void *kbase) {
     //     push    rbp
     //     mov     rbp, rsp
     //     ...
-    write32(kbase, 0x88CE0, 0xc3c03148);
+    write32(kbase, 0x88ce0, 0xc3c03148);
 
     // patch sys_mmap() to allow rwx mappings
     // patch maximum cpu mem protection: 0x33 -> 0x37
@@ -154,8 +152,8 @@ static inline void do_patch(void *kbase) {
     // GPU X: 0x8 R: 0x10 W: 0x20
     // that's why you see other bits set
     // ref: https://cturt.github.io/ps4-2.html
-    write8(kbase, 0x15626A, 0x37);
-    write8(kbase, 0x15626D, 0x37);
+    write8(kbase, 0x15626a, 0x37);
+    write8(kbase, 0x15626d, 0x37);
 
     // overwrite the entry of syscall 11 (unimplemented) in sysent
     //

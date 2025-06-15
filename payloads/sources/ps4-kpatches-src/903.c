@@ -44,7 +44,7 @@ static inline void do_patch(void *kbase) {
     write16(kbase, 0x271282, 0x9090); // copyout 1
     write16(kbase, 0x27128e, 0x9090); // copyout 2
     write8(kbase, 0x271290, 0x90); // copyout 2
-    
+
     write16(kbase, 0x271823, 0x9090); // copyinstr 1
     write16(kbase, 0x27182f, 0x9090); // copyinstr 2
     write8(kbase, 0x271831, 0x90); // copyinstr 2

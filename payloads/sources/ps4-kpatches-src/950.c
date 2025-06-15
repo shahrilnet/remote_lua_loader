@@ -45,10 +45,10 @@ static inline void do_patch(void *kbase) {
     write16(kbase, 0x201e1e, 0x9090); // copyout 2
     write8(kbase, 0x201e20, 0x90); // copyout 2
 
-    write16(kbase, 0x2023B3, 0x9090); // copyinstr 1
-    write16(kbase, 0x2023BF, 0x9090); // copyinstr 2
-    write8(kbase, 0x2023C1, 0x90); // copyinstr 2
-    write16(kbase, 0x2023F0, 0x9090); // copyinstr 3
+    write16(kbase, 0x2023b3, 0x9090); // copyinstr 1
+    write16(kbase, 0x2023bf, 0x9090); // copyinstr 2
+    write8(kbase, 0x2023c1, 0x90); // copyinstr 2
+    write16(kbase, 0x2023f0, 0x9090); // copyinstr 3
 
     // ChendoChap's patches from pOOBs4
     write16(kbase, 0x624ae4, 0x9090); // veriPatch
