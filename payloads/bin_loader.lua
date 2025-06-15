@@ -16,13 +16,7 @@ function bin_loader:load_from_file(filepath)
     return self
 end
 
-function bin_loader:parse()
-    if PLATFORM ~= "ps4" then
-        error("this payload only targets ps4")
-    end
-    
-    check_jailbroken()
-    
+function bin_loader:parse()    
     -- allocate executable area
     local MAP_COMBINED = bit32.bor(MAP_PRIVATE, MAP_ANONYMOUS)
     local PROT_COMBINED = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
@@ -76,6 +70,12 @@ function bin_loader:wait_for_payload_to_exit()
 end
 
 function main()
+    if PLATFORM ~= "ps4" then
+        error("this payload only targets ps4")
+    end
+    
+    check_jailbroken()
+    
     local payload_data_path = "/data/payload.bin"
     local payload_savedata_path = string.format("/mnt/sandbox/%s_000/savedata0/payload.bin", get_title_id())
 
