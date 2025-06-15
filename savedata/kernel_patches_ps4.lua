@@ -6,7 +6,7 @@
 
     Based on the kernel patches of: TheFlow, ChendoChap, abc, AlAzif and LightningMods.
     Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/psfree-1.5rc1.7z
-    Modified Source: https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/ps4-kpatches-src.7z
+    Modified Source: https://github.com/shahrilnet/remote_lua_loader/tree/wip-binloader/payloads/sources/ps4-kpatches-src
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
