@@ -135,6 +135,11 @@ function get_offsets(gamename)
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
     if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end
     if gamename == "F" then add_offsets = offsets.libc.f end
+
+    -- check if offsets table is empty
+    if next(add_offsets) == nil then
+        error("libc game offsets for FTP server not found! Exiting")
+    end
 end
 
 function time(tloc)
