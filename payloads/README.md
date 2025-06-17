@@ -18,7 +18,7 @@ Examples:
 
 | Payload | Target | Description |
 | -------- | ------- | ------- |
-| kdata_dumper.lua | PS5 | Dump content of kernel data segments over network until it crashes (NOTE: you must modify the IP address before you run this payload) |
+| kdata_dumper.lua | PS5 | Dump content of kernel data segments over network until it crashes. (NOTE: you must modify the IP address before you run this payload) |
 
 ### Payloads after jailbroken game process
 
@@ -26,7 +26,8 @@ Examples:
 | -------- | ------- | ------- |
 | read_klog.lua | PS5 | Read content of `/dev/klog`. |
 | elf_loader.lua | PS5 | Rudimentary ELF loader to load from file system. By default it will try to load John Tornblom's [elfldr.elf](https://github.com/ps5-payload-dev/elfldr) shipped with savedata, or alternatively from `/data/elfldr.elf` if you need to have updated elfldr.elf (you need to place there yourself using FTP server). |
-| bin_loader.lua | PS4 | Rudimentary payload loader to load from a socket on port 9021 or file system. |
+| bin_loader.lua | PS4 | Rudimentary payload loader to load from a socket on port 9021, or alternatively from `/data/payload.bin`. |
+| kernel_dumper.lua | PS4 | Dump content of kernel . (NOTE: you must connect a USB drive to the PS4 before running this payload) |
 
 ### send_lua.py additional options
 
