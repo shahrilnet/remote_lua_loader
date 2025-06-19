@@ -36,20 +36,6 @@ __attribute__((always_inline))
 static inline void do_patch(void *kbase) {
     disable_cr0_wp();
 
-    // TheFlow's patches from PPPwn
-    write16(kbase, 0x2bd5e7, 0x9090); // copyin 1
-    write16(kbase, 0x2bd5f3, 0x9090); // copyin 2
-    write8(kbase, 0x2bd5f5, 0x90); // copyin 2
-
-    write16(kbase, 0x2bd4f2, 0x9090); // copyout 1
-    write16(kbase, 0x2bd4fe, 0x9090); // copyout 2
-    write8(kbase, 0x2bd500, 0x90); // copyout 2
-
-    write16(kbase, 0x2bda93, 0x9090); // copyinstr 1
-    write16(kbase, 0x2bda9f, 0x9090); // copyinstr 2
-    write8(kbase, 0x2bdaa1, 0x90); // copyinstr 2
-    write16(kbase, 0x2bdad0, 0x9090); // copyinstr 3
-
     // LightningMods's additional dlsym patches from PPPwn
     write16(kbase, 0x1b76a3, 0x04eb); // skip check 1
     write16(kbase, 0x1b76b3, 0x04eb); // skip check 2

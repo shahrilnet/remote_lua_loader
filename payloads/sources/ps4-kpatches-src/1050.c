@@ -36,20 +36,6 @@ __attribute__((always_inline))
 static inline void do_patch(void *kbase) {
     disable_cr0_wp();
 
-    // TheFlow's patches from PPPwn
-    write16(kbase, 0xd75b7, 0x9090); // copyin 1
-    write16(kbase, 0xd75c3, 0x9090); // copyin 2
-    write8(kbase, 0xd75c5, 0x90); // copyin 2
-
-    write16(kbase, 0xd74c2, 0x9090); // copyout 1
-    write16(kbase, 0xd74ce, 0x9090); // copyout 2
-    write8(kbase, 0xd74d0, 0x90); // copyout 2
-
-    write16(kbase, 0xd7a63, 0x9090); // copyinstr 1
-    write16(kbase, 0xd7a6f, 0x9090); // copyinstr 2
-    write8(kbase, 0xd7a71, 0x90); // copyinstr 2
-    write16(kbase, 0xd7aa0, 0x9090); // copyinstr 3
-
     // ChendoChap's patches from pOOBs4
     write16(kbase, 0x627db4, 0x9090); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
