@@ -13,7 +13,7 @@ games_identification = {
     [0xb10] = "JinkiResurrection", -- CUSA25179
     [0x410] = "FuyuKiss",
     [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
-    [0x70] = "HaruotoAlice" --CUSA-14324
+    [0x70] = "SnowDrop" --CUSA-14324
 }
 
 --[[
@@ -1117,7 +1117,7 @@ gadget_table = {
             Atomic_fetch_add_8 = 0x39800,
         }
     },
-    haruoto_alice = {
+    snow_drop = {
         gadgets = {
             ["ret"] = 0x4C,
 
