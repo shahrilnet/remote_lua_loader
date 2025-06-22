@@ -13,6 +13,7 @@ games_identification = {
     [0xb10] = "JinkiResurrection", -- CUSA25179
     [0x410] = "FuyuKiss",
     [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
+    [0x70] = "HaruotoAlice" --CUSA-14324
 }
 
 --[[
@@ -1115,5 +1116,96 @@ gadget_table = {
 
             Atomic_fetch_add_8 = 0x39800,
         }
+    },
+    haruoto_alice = {
+        gadgets = {
+            ["ret"] = 0x4C,
+
+            ["pop rsp; ret"] = 0xA42,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0xA32,
+            ["pop rbx; ret"] = 0xD1535,
+            ["pop rcx; ret"] = 0xD32,
+            ["pop rdx; ret"] = 0x3EAD17,
+            ["pop rdi; ret"] = 0xD71C2,
+            ["pop rsi; ret"] = 0xA5376,
+            ["pop r8; ret"] = 0xa31,
+
+            ["mov r9, rbx; call [rax + 8]"] = 0x150660,
+
+            ["pop r13; pop r14; pop r15; ret"] = 0x114F53,
+            ["mov r9, r13; call [rax + 8]"] = 0x13B864,
+
+            ["mov [rax + 8], rcx; ret"] = 0x13B7EA,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14E8BF,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xD550E,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11BF02,
+            ["add rax, r8; ret"] = 0xAC43,
+
+            ["mov [rdi], rsi; ret"] = 0xD56DF,
+            ["mov [rdi], rax; ret"] = 0x97CEB,
+            ["mov [rdi], eax; ret"] = 0x97CEC,
+
+            ["add [rbx], eax; ret"] = 0x4253FF,
+            ["add [rbx], ecx; ret"] = nil,
+            ["add [rbx], edi; ret"] = 0x403653,
+            ["mov rax, [rax]; ret"] = 0x2069B,
+            ["inc dword [rax]; ret"] = 0x19A78B,
+
+            ["cmp [rax], ebx; ret"] = 0x405B48,
+            ["sete al; ret"] = 0x5E515,
+            ["setne al; ret"] = 0x573,
+            ["seta al; ret"] = 0x16CABE,
+            ["setb al; ret"] = 0x5E534,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xCF9EA,
+            ["shl rax, cl; ret"] = 0xD9F61,
+            ["add rax, rcx; ret"] = 0x3681E,
+
+            stack_pivot = {
+                ["mov esp, 0xfb0000bd; ret"] = 0x3B4054,
+                ["mov esp, 0xf00000b9; ret"] = 0x3B9D9C,
+            }
+        },
+        eboot_addrofs = {
+            fake_string = 0x4D8164,
+            luaB_auxwrap = 0x1a1070,
+            strerror_import = 0x4f3d40,
+
+            luaL_optinteger = 0x19ea50,
+            luaL_checklstring = 0x19e640,
+            lua_pushlstring = 0x19c730,
+            lua_pushinteger = 0x19c710,
+
+            luaL_newstate = 0x19f9a0,
+            luaL_openlibs = 0x1a99f0,
+            lua_setfield = 0x19d1f0,
+            luaL_loadstring = 0x19f930,
+            lua_pcall = 0x19d890,
+            lua_pushcclosure = 0x19c940,
+            lua_tolstring = 0x19be40,
+            lua_pushstring = 0x19c790,
+        },
+        libc_addrofs = {
+            calloc = 0x22a90,
+            memcpy = 0x18b90,
+            setjmp = 0x802a0,
+            longjmp = 0x802f0,
+            strerror = 0xcf70,
+            error = 0x13e,
+            sceKernelGetModuleInfoFromAddr = 0x568,
+            gettimeofday_import = 0xefe20,
+
+            Thrd_join = 0x21f00,
+            Thrd_exit = 0x21f80,
+            Thrd_create = 0x22090,
+
+            Mtx_init = 0x22320,
+            Mtx_lock = 0x223b0,
+            Mtx_unlock = 0x223b0,
+
+            Atomic_fetch_add_8 = 0xe380
+        }
+
     },
 }

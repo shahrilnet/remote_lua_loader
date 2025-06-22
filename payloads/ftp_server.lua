@@ -136,6 +136,7 @@ function get_offsets(gamename)
     if gamename == "FuyuKiss" then add_offsets = offsets.libc.fuyu_kiss end
     if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end
     if gamename == "F" then add_offsets = offsets.libc.f end
+    if gamename == "HaruotoAlice" then add_offsets = offsets.libc.nora_princess end
 
     -- check if offsets table is empty
     if next(add_offsets) == nil then
