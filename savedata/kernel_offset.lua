@@ -256,7 +256,7 @@ ps5_kernel_offset_list = {
 }
 
 ps4_kernel_offset_list = {
-    [{ "9.00" }] = { -- Tested
+    [{ "9.00" }] = {
         EVF_OFFSET          = 0x7f6f27,
         PRISON0             = 0x111f870,
         ROOTVNODE           = 0x21eff20,
@@ -296,7 +296,7 @@ ps4_kernel_offset_list = {
         SYSENT_661_OFFSET   = 0x110a5b0,
         JMP_RSI_GADGET      = 0x50ded
     },
-    [{ "11.00" }] = { -- credit: @egycnq Tested
+    [{ "11.00" }] = { -- credit: @egycnq
         EVF_OFFSET          = 0x7fc26f,
         PRISON0             = 0x111f830,
         ROOTVNODE           = 0x2116640,
@@ -320,7 +320,7 @@ ps4_kernel_offset_list = {
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x704d5
     },
-    [{ "12.00", "12.02" }] = { -- credit: @egycnq Tested
+    [{ "12.00", "12.02" }] = { -- credit: @egycnq
         EVF_OFFSET          = 0x784798,
         PRISON0             = 0x111fa18,
         ROOTVNODE           = 0x2136e90,

@@ -36,22 +36,8 @@ __attribute__((always_inline))
 static inline void do_patch(void *kbase) {
     disable_cr0_wp();
 
-    // TheFlow's patches from PPPwn
-    write16(kbase, 0x271377, 0x9090); // copyin 1
-    write16(kbase, 0x271383, 0x9090); // copyin 2
-    write8(kbase, 0x271385, 0x90); // copyin 2
-
-    write16(kbase, 0x271282, 0x9090); // copyout 1
-    write16(kbase, 0x27128e, 0x9090); // copyout 2
-    write8(kbase, 0x271290, 0x90); // copyout 2
-
-    write16(kbase, 0x271823, 0x9090); // copyinstr 1
-    write16(kbase, 0x27182f, 0x9090); // copyinstr 2
-    write8(kbase, 0x271831, 0x90); // copyinstr 2
-    write16(kbase, 0x271860, 0x9090); // copyinstr 3
-
     // ChendoChap's patches from pOOBs4
-    write16(kbase, 0x624834, 0x9090); // veriPatch
+    write16(kbase, 0x624834, 0x00eb); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
     write8(kbase, 0x27107d, 0xeb); // bzero
     write8(kbase, 0x2710c1, 0xeb); // pagezero
@@ -60,6 +46,9 @@ static inline void do_patch(void *kbase) {
     write8(kbase, 0x27132d, 0xeb); // copyin
     write8(kbase, 0x2717dd, 0xeb); // copyinstr
     write8(kbase, 0x2718ad, 0xeb); // copystr
+
+    // stop sysVeri from causing a delayed panic on suspend
+    write16(kbase, 0x62511f, 0x00eb);
 
     // patch amd64_syscall() to allow calling syscalls everywhere
     // struct syscall_args sa; // initialized already
@@ -96,8 +85,8 @@ static inline void do_patch(void *kbase) {
     //
     // sy_call() is the function that will execute the requested syscall.
     write8(kbase, 0x4c2, 0xeb);
-    write16(kbase, 0x4b9, 0x9090);
-    write16(kbase, 0x4b5, 0x9090);
+    write16(kbase, 0x4b9, 0x00eb);
+    write16(kbase, 0x4b5, 0x00eb);
 
     // patch sys_setuid() to allow freely changing the effective user ID
     // ; PRIV_CRED_SETUID = 50

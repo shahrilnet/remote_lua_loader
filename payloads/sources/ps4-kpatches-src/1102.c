@@ -36,27 +36,13 @@ __attribute__((always_inline))
 static inline void do_patch(void *kbase) {
     disable_cr0_wp();
 
-    // TheFlow's patches from PPPwn
-    write16(kbase, 0x2de057, 0x9090); // copyin 1
-    write16(kbase, 0x2de063, 0x9090); // copyin 2
-    write8(kbase, 0x2de065, 0x90); // copyin 2
-
-    write16(kbase, 0x2ddf62, 0x9090); // copyout 1
-    write16(kbase, 0x2ddf6e, 0x9090); // copyout 2
-    write8(kbase, 0x2ddf70, 0x90); // copyout 2
-
-    write16(kbase, 0x2de503, 0x9090); // copyinstr 1
-    write16(kbase, 0x2de50f, 0x9090); // copyinstr 2
-    write8(kbase, 0x2de511, 0x90); // copyinstr 2
-    write16(kbase, 0x2de540, 0x9090); // copyinstr 3
-
     // LightningMods's additional dlsym patches from PPPwn
     write16(kbase, 0x1e4c53, 0x04eb); // skip check 1
     write16(kbase, 0x1e4c63, 0x04eb); // skip check 2
     write16(kbase, 0x1e4c83, 0xe990); // nop + jmp
 
     // ChendoChap's patches from pOOBs4
-    write16(kbase, 0x623f04, 0x9090); // veriPatch
+    write16(kbase, 0x623f04, 0x00eb); // veriPatch
     write8(kbase, 0xacd, 0xeb); // bcopy
     write8(kbase, 0x2ddd5d, 0xeb); // bzero
     write8(kbase, 0x2ddda1, 0xeb); // pagezero
@@ -65,6 +51,9 @@ static inline void do_patch(void *kbase) {
     write8(kbase, 0x2dd00d, 0xeb); // copyin
     write8(kbase, 0x2de4bd, 0xeb); // copyinstr
     write8(kbase, 0x2de58d, 0xeb); // copystr
+
+    // stop sysVeri from causing a delayed panic on suspend
+    write16(kbase, 0x6247ef, 0x00eb);
 
     // patch amd64_syscall() to allow calling syscalls everywhere
     // struct syscall_args sa; // initialized already
@@ -101,8 +90,8 @@ static inline void do_patch(void *kbase) {
     //
     // sy_call() is the function that will execute the requested syscall.
     write8(kbase, 0x4c2, 0xeb);
-    write16(kbase, 0x4b9, 0x9090);
-    write16(kbase, 0x4b5, 0x9090);
+    write16(kbase, 0x4b9, 0x00eb);
+    write16(kbase, 0x4b5, 0x00eb);
 
     // patch sys_setuid() to allow freely changing the effective user ID
     // ; PRIV_CRED_SETUID = 50
