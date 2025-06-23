@@ -104,6 +104,7 @@ function native.setup_cmd_handler(pivot_handler)
        game_name == "Aikagi2" or
        game_name == "JinkiResurrection" or
        game_name == "FuyuKiss" or
+       game_name == "C" or
        game_name == "F" then
         stack_offset = -0x68
     end

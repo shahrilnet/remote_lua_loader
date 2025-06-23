@@ -514,7 +514,7 @@ gadget_table = {
             }
         },
         eboot_addrofs = {
-            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            fake_string = 0x4b0164, -- SCE_RELRO segment, use ptr as size for fake string
             luaB_auxwrap = 0x195280, -- to resolve eboot base
             strerror_import = 0x4CB040, -- to resolve libc base
 
@@ -535,7 +535,7 @@ gadget_table = {
         libc_addrofs = {
             calloc = 0x5e2e0,
             memcpy = 0x54a60,
-            setjmp = 0x74ad0,
+            setjmp = 0x71ad0,
             longjmp = 0x71b20,
             strerror = 0x49020,
             error = 0x148,
