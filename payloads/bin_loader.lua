@@ -56,8 +56,7 @@ function bin_loader:load_from_data(data)
     local MAP_COMBINED = bit32.bor(MAP_PRIVATE, MAP_ANONYMOUS)
     local PROT_COMBINED = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
 
-    local base_addr = 0x926200000
-    local ret = syscall.mmap(base_addr, mmap_size, PROT_COMBINED, MAP_COMBINED, -1, 0)
+    local ret = syscall.mmap(0, mmap_size, PROT_COMBINED, MAP_COMBINED, -1, 0)
     if ret:tonumber() < 0 then
         error("mmap() error: " .. get_error_string())
     end
@@ -91,6 +90,7 @@ function bin_loader:run()
     print("spawning payload")
     send_ps_notification("spawning payload")
 
+    -- spawn elf in new thread
     local ret = Thrd_create(thr_handle_addr, self.bin_entry_point):tonumber()
     if ret ~= 0 then
         error("Thrd_create() error: " .. hex(ret))
@@ -102,6 +102,7 @@ end
 function bin_loader:wait_for_payload_to_exit()
     local Thrd_join = fcall(libc_addrofs.Thrd_join)
 
+    -- will block until elf terminates
     local ret = Thrd_join(self.thr_handle, 0):tonumber()
     if ret ~= 0 then
         error("Thrd_join() error: " .. hex(ret))
@@ -112,7 +113,7 @@ function bin_loader:wait_for_payload_to_exit()
     end
 end
 
-function listen_for_payload(timeout_us)
+function listen_for_payload()
     local enable = memory.alloc(4)
     local sockaddr_in = memory.alloc(16)
     local addrlen = memory.alloc(8)
@@ -149,19 +150,35 @@ function listen_for_payload(timeout_us)
     printf("[+] Listening for a payload on port %d...", PORT)
 
     memory.write_dword(addrlen, 16)
-    memory.write_dword(addrlen, 16)
+
     local client_fd = syscall.accept(sock_fd, sockaddr_in, addrlen):tonumber()
 
     while client_fd < 0 do
         print("accept() error: " .. get_error_string())
         syscall.close(sock_fd)
+        
         sock_fd = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
-        syscall.setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, enable, 4)
+        if sock_fd < 0 then
+            error("socket() error: " .. get_error_string())
+        end
+
+        memory.write_dword(enable, 1)
+        if syscall.setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, enable, 4):tonumber() < 0 then
+            error("setsockopt() error: " .. get_error_string())
+        end
+
         memory.write_byte(sockaddr_in + 1, AF_INET)
         memory.write_word(sockaddr_in + 2, htons(PORT))
         memory.write_dword(sockaddr_in + 4, INADDR_ANY)
-        syscall.bind(sock_fd, sockaddr_in, 16)
-        syscall.listen(sock_fd, 3)
+
+        if syscall.bind(sock_fd, sockaddr_in, 16):tonumber() < 0 then
+            error("bind() error: " .. get_error_string())
+        end
+     
+        if syscall.listen(sock_fd, 3):tonumber() < 0 then
+            error("listen() error: " .. get_error_string())
+        end
+        
         print("[+] waiting for new connection...")
         memory.write_dword(addrlen, 16)
         client_fd = syscall.accept(sock_fd, sockaddr_in, addrlen):tonumber()
@@ -170,22 +187,25 @@ function listen_for_payload(timeout_us)
     printf("[+] accepted new connection client fd %d", client_fd)
 
     local cur_buf = buf
-    local total_read = 0
-    while true do
-        local read_size = syscall.read(client_fd, cur_buf, READ_CHUNK):tonumber()
-        if read_size <= 0 then break end
+    
+    local read_size
+    repeat
+        read_size = syscall.read(client_fd, cur_buf, 4096):tonumber()
         cur_buf = cur_buf + read_size
-        total_read = total_read + read_size
-    end
+    until read_size <= 0
+    
+    local payload_size = cur_buf - buf
+    local payload_data = memory.read_buffer(buf, payload_size)
 
-    local payload_data = memory.read_buffer(buf, total_read)
     printf("[+] accepted payload with size %d (%s)", #payload_data, hex(#payload_data))
 
     local bin = bin_loader:load_from_data(payload_data)
     bin:run()
     bin:wait_for_payload_to_exit()
-
+    
     syscall.close(client_fd)
+    client_fd = nil
+
     syscall.close(sock_fd)
 end
 
