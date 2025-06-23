@@ -146,7 +146,7 @@ function listen_for_payload(timeout_us)
     end
 
     send_ps_notification(string.format("Listening for a payload on port %d", PORT))
-    print(string.format("[+] Listening for a payload on port %d...", PORT))
+    printf("[+] Listening for a payload on port %d...", PORT)
 
     memory.write_dword(addrlen, 16)
     memory.write_dword(addrlen, 16)
