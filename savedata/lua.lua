@@ -218,6 +218,11 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.f.eboot_addrofs
         libc_addrofs = gadget_table.f.libc_addrofs
         gadgets = gadget_table.f.gadgets
+    elseif game_name == "SnowDrop" then
+        print("[+] Game identified as Snow Drop")
+        eboot_addrofs = gadget_table.snow_drop.eboot_addrofs
+        libc_addrofs = gadget_table.snow_drop.libc_addrofs
+        gadgets = gadget_table.snow_drop.gadgets
     end
 end
 
