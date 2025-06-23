@@ -118,6 +118,11 @@ offsets = {
             gmtime = 0x33800,
             gmtime_s = 0x2A480
         },
+        snow_drop = {
+            time = 0x7FBB0,
+            gmtime = 0x9730,
+            gmtime_s = 0x1600
+        },
     }
 }
 
@@ -136,7 +141,7 @@ function get_offsets(gamename)
     if gamename == "FuyuKiss" then add_offsets = offsets.libc.fuyu_kiss end
     if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end
     if gamename == "F" then add_offsets = offsets.libc.f end
-    if gamename == "SnowDrop" then add_offsets = offsets.libc.nora_princess end
+    if gamename == "SnowDrop" then add_offsets = offsets.libc.snow_drop end
 
     -- check if offsets table is empty
     if next(add_offsets) == nil then
