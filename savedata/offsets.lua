@@ -1192,7 +1192,7 @@ gadget_table = {
             setjmp = 0x802a0,
             longjmp = 0x802f0,
             strerror = 0xcf70,
-            error = 0x13e,
+            error = 0x138,
             sceKernelGetModuleInfoFromAddr = 0x568,
             gettimeofday_import = 0xefe20,
 
@@ -1202,7 +1202,7 @@ gadget_table = {
 
             Mtx_init = 0x22320,
             Mtx_lock = 0x223b0,
-            Mtx_unlock = 0x223b0,
+            Mtx_unlock = 0x223a0,
 
             Atomic_fetch_add_8 = 0xe380
         }
