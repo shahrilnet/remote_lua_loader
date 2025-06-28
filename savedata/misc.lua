@@ -409,8 +409,9 @@ function get_title_id()
     local sceKernelGetAppInfo = fcall(dlsym(LIBKERNEL_HANDLE, "sceKernelGetAppInfo"))
 
     local app_info = memory.alloc(0x100)
-
-    if sceKernelGetAppInfo(syscall.getpid(), app_info):tonumber() ~= 0 then
+    
+    local ret = sceKernelGetAppInfo(syscall.getpid(), app_info):tonumber()
+    if ret ~= 0 then
         error("sceKernelGetAppInfo() error: " .. hex(ret))
     end
 
@@ -451,7 +452,43 @@ function find_mod_by_name(name)
     return nil
 end
 
+-- ref: https://github.com/idlesauce/umtx2/blob/71bdf0237b3ce488653cb16699e098d7ddbc3a92/document/en/ps5/main.js#L405
+function get_network_interface_addr()
 
+    local count = syscall.netgetiflist(0, 10):tonumber()
+    if count == -1 then
+        error("netgetiflist() error: " .. get_error_string())
+    end
+
+    local iface_size = 0x1e0
+    local iface_buf = memory.alloc(iface_size * count)
+    
+    if syscall.netgetiflist(iface_buf, count):tonumber() == -1 then
+        error("netgetiflist() error: " .. get_error_string())
+    end
+
+    local iface_list = {}
+
+    for i=0,count-1 do
+        local iface_name = memory.read_null_terminated_string(iface_buf + i*iface_size)
+        local iface_ip_buf = memory.read_buffer(iface_buf + i*iface_size + 0x28, 4)
+        local iface_ip_str = string.format("%d.%d.%d.%d",
+            string.byte(iface_ip_buf, 1), string.byte(iface_ip_buf, 2),
+            string.byte(iface_ip_buf, 3), string.byte(iface_ip_buf, 4))
+        iface_list[iface_name] = iface_ip_str
+    end
+
+    return iface_list
+end
+
+function get_current_ip()
+    local iface_list = get_network_interface_addr()
+    for _, iface_ip in pairs(iface_list) do
+        if iface_ip ~= "0.0.0.0" and iface_ip ~= "127.0.0.1" then
+            return iface_ip
+        end
+    end
+end
 
 
 -- store data that persists across payload executions

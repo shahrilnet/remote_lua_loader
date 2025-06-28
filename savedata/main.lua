@@ -129,8 +129,17 @@ function remote_lua_loader(port)
         error("listen() error: " .. get_error_string())
     end
 
-    notify(string.format("remote lua loader\nrunning on %s %s\nlistening on port %d",
-        PLATFORM, FW_VERSION, port))
+    local current_ip = get_current_ip()
+    local network_str = nil
+    
+    if current_ip then
+        network_str = string.format("%s:%d", current_ip, port)
+    else
+        network_str = string.format("port %d", port)
+    end
+
+    notify(string.format("remote lua loader\nrunning on %s %s\nlistening on %s",
+        PLATFORM, FW_VERSION, network_str))
 
     while true do
 
@@ -276,6 +285,7 @@ function main()
         setsockopt = 0x69,
         listen = 0x6a,
         getsockopt = 0x76,
+        netgetiflist = 0x7d,
         sysctl = 0xca,
         nanosleep = 0xf0,
         sigaction = 0x1a0,
