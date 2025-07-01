@@ -483,9 +483,11 @@ end
 
 function get_current_ip()
     local iface_list = get_network_interface_addr()
-    for _, iface_ip in pairs(iface_list) do
-        if iface_ip ~= "0.0.0.0" and iface_ip ~= "127.0.0.1" then
-            return iface_ip
+    for iface_name, iface_ip in pairs(iface_list) do
+        if iface_name == "eth0" or iface_name == "wlan0" then
+            if iface_ip ~= "0.0.0.0" and iface_ip ~= "127.0.0.1" then
+                return iface_ip
+            end
         end
     end
 end
