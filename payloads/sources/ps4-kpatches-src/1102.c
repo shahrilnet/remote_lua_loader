@@ -48,7 +48,7 @@ static inline void do_patch(void *kbase) {
     write8(kbase, 0x2ddda1, 0xeb); // pagezero
     write8(kbase, 0x2dde1d, 0xeb); // memcpy
     write8(kbase, 0x2dde61, 0xeb); // pagecopy
-    write8(kbase, 0x2dd00d, 0xeb); // copyin
+    write8(kbase, 0x2de00d, 0xeb); // copyin
     write8(kbase, 0x2de4bd, 0xeb); // copyinstr
     write8(kbase, 0x2de58d, 0xeb); // copystr
 
