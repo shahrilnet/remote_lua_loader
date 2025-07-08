@@ -40,7 +40,7 @@ local function load_elf_segments(buffer, base_addr)
             local seg_addr = base_addr + (p_vaddr % 0x1000000) -- use relative offset
             memory.memcpy(seg_addr, buffer + p_offset, p_filesz)
             if p_memsz > p_filesz then
-                memory.memset(seg_addr + p_filesz, 0, p_memsz - p_filesz)
+                -- memory.memset(seg_addr + p_filesz, 0, p_memsz - p_filesz)
             end
         end
     end
