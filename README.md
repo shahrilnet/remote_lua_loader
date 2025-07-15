@@ -23,6 +23,8 @@ Currently this loader is specific for the following list of games:
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 
+If you have the savedata setup and want to update the files, please refer [UPDATE.md](UPDATE.md)
+
 This repo provides few [payloads](payloads/) for you to play around. PRs for useful payloads are welcomed
 
 ## Credits
