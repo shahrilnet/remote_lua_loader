@@ -10,9 +10,8 @@ Make sure to read the [README.md](https://github.com/n0llptr/Playstation-5-Save-
 
 0. If you jailbreak using one of the Artemis/Lua games, you will need to exit the game after the exploit has run. If using any other method to jailbreak, then proceed to Step 1.
     - Follow the next steps from the home menu with no games running on your console
-1. After jailbreaking, you need to load [ps5debug](https://github.com/GoldHEN/ps5debug) on the console. Use at least version [`v1.0b5`](https://github.com/GoldHEN/ps5debug/releases) for 3.xx-7.xx.
+1. After jailbreaking, you need to load [ps5debug](https://github.com/GoldHEN/ps5debug) on the console. Use at least version [`v1.0b5`](https://github.com/GoldHEN/ps5debug/releases) or newer.
     - Use a payload sender or load it along with the exploit chain.
-    - Currently fully supported firmwares for the save mounter: `3.20, 4.03, 5.02, 6.02, and 7.40` (It might work if you have the same major version)
 2. Run the Save Mounter and enter your console's IP address -> You should see `Status: Connected` at the bottom of the Save Mounter
 3. Click **Patch** and you should see `Status: Patched Shellcore`
 4. Click **Setup** and once you see `Status: Setup Done`, then select your user from the drop down menu.
