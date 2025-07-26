@@ -7,7 +7,7 @@ games_identification = {
     [0x420] = "HamidashiCreative",
     [0x5d0] = "AikagiKimiIsshoniPack",
     [0x280] = "C",
-    [0x600] = "E",
+    [0x600] = "WinterGuest",
     [0xd80] = "IxSHETell",
     [0x660] = "NoraPrincess",  -- CUSA13303 Nora Princess and Stray Cat Heart HD
     [0xb10] = "JinkiResurrection", -- CUSA25179
@@ -553,7 +553,7 @@ gadget_table = {
             Atomic_fetch_add_8 = 0x4a340,
         }
     },
-    e = {
+    winter_guest = {
         gadgets = {    
             ["ret"] = 0x4c,
             

@@ -83,7 +83,7 @@ offsets = {
             gmtime = 0x469E0,
             gmtime_s = 0x3F540
         },
-        e = {
+        winter_guest = {
             time = 0x7EEA0,
             gmtime = 0x96D0,
             gmtime_s = 0x1640
@@ -134,7 +134,7 @@ function get_offsets(gamename)
     if gamename == "HamidashiCreative" then add_offsets = offsets.libc.hamidashi_creative end
     if gamename == "AikagiKimiIsshoniPack" then add_offsets = offsets.libc.aikagi_kimi_isshoni_pack end
     if gamename == "C" then add_offsets = offsets.libc.c end
-    if gamename == "E" then add_offsets = offsets.libc.e end
+    if gamename == "WinterGuest" then add_offsets = offsets.libc.winter_guest end
     if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
     if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
     if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
