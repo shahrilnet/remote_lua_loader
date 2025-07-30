@@ -21,6 +21,7 @@ Currently this loader is specific for the following list of games:
 14. Nora Princess and Crying Cat 2 (CUSA13586)
 15. Haruoto Alice Gram Snow Drop (CUSA14324)
 16. Tonari ni Kanojo no Iru Shiawase Winter Guest (CUSA11977)
+17. Mikagami (CUSA11481)
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 

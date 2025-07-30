@@ -223,6 +223,11 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.snow_drop.eboot_addrofs
         libc_addrofs = gadget_table.snow_drop.libc_addrofs
         gadgets = gadget_table.snow_drop.gadgets
+    elseif game_name == "Mikagami" then
+        print("[+] Game identified as Mikagami")
+        eboot_addrofs = gadget_table.mikagami.eboot_addrofs
+        libc_addrofs = gadget_table.mikagami.libc_addrofs
+        gadgets = gadget_table.mikagami.gadgets
     end
 end
 
