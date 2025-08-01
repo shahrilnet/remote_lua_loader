@@ -123,6 +123,11 @@ offsets = {
             gmtime = 0x9730,
             gmtime_s = 0x1600
         },
+        mikagami = {
+            time = 0x7eea0,
+            gmtime = 0x96d0,
+            gmtime_s = 0x1640
+        }
     }
 }
 
@@ -142,6 +147,7 @@ function get_offsets(gamename)
     if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end
     if gamename == "F" then add_offsets = offsets.libc.f end
     if gamename == "SnowDrop" then add_offsets = offsets.libc.snow_drop end
+    if gamename == "Mikagami" then add_offsets = offsets.libc.mikagami end
 
     -- check if offsets table is empty
     if next(add_offsets) == nil then
