@@ -1731,7 +1731,6 @@ function post_exploitation_ps4()
         syscall.resolve({
             munmap = 0x49,
             jitshm_create = 0x215,
-            jitshm_alias = 0x216,
         })
         
         local PROT_RW = bit32.bor(PROT_READ, PROT_WRITE)
@@ -1742,11 +1741,8 @@ function post_exploitation_ps4()
         -- create shm with exec permission
         local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
 
-        -- create shm alias with write permission
-        local write_handle = syscall.jitshm_alias(exec_handle, PROT_RW)
-
         -- map shadow mapping and write into it
-        syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, write_handle, 0)
+        syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, exec_handle, 0)
         memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), #bin_data)
 
         -- map executable segment
