@@ -1717,7 +1717,6 @@ function post_exploitation_ps4()
         printf("File read to address: 0x%x, %d bytes", bin_data_addr:tonumber(), #bin_data)
 
         local mapping_addr = uint64(0x920100000)
-        local shadow_mapping_addr = uint64(0x926100000)
         
         local sysent_661_addr = kernel.addr.data_base + kernel_offset.SYSENT_661_OFFSET
         local sy_narg = kernel.read_dword(sysent_661_addr):tonumber()
@@ -1731,9 +1730,9 @@ function post_exploitation_ps4()
         syscall.resolve({
             munmap = 0x49,
             jitshm_create = 0x215,
+            -- jitshm_alias = 0x216,
         })
         
-        local PROT_RW = bit32.bor(PROT_READ, PROT_WRITE)
         local PROT_RWX = bit32.bor(PROT_READ, PROT_WRITE, PROT_EXECUTE)
         
         local aligned_memsz = 0x10000
@@ -1741,12 +1740,9 @@ function post_exploitation_ps4()
         -- create shm with exec permission
         local exec_handle = syscall.jitshm_create(0, aligned_memsz, PROT_RWX)
 
-        -- map shadow mapping and write into it
-        syscall.mmap(shadow_mapping_addr, aligned_memsz, PROT_RW, 0x11, exec_handle, 0)
-        memory.memcpy(shadow_mapping_addr, bin_data_addr:tonumber(), #bin_data)
-
         -- map executable segment
         syscall.mmap(mapping_addr, aligned_memsz, PROT_RWX, 0x11, exec_handle, 0)
+        memory.memcpy(mapping_addr, bin_data_addr:tonumber(), #bin_data)
         printf("First bytes: 0x%x", memory.read_dword(mapping_addr):tonumber())
         
         syscall.kexec(mapping_addr)
