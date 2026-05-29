@@ -160,21 +160,32 @@ function get_error_string()
     return errno:tonumber() .. " " .. memory.read_null_terminated_string(strerror(errno))
 end
 
-function sysctlbyname(name, oldp, oldp_len, newp, newp_len)
-    
+function sysctl_name2oid(name)
+
     local translate_name_mib = memory.alloc(0x8)
     local buf_size = 0x70
-    local mib = memory.alloc(buf_size)
+    local oid_buf = memory.alloc(buf_size)
     local size = memory.alloc(0x8)
-
-    memory.write_qword(translate_name_mib, 0x300000000)
-    memory.write_qword(size, buf_size)
     
-    if syscall.sysctl(translate_name_mib, 2, mib, size, name, #name):tonumber() < 0 then
+    memory.write_qword(translate_name_mib, 0x300000000)
+    memory.write_qword(size, 0x70)
+
+    if syscall.sysctl(translate_name_mib, 2, oid_buf, size, name, #name):tonumber() < 0 then
+        return nil, 0
+    end
+
+    local oid_len = memory.read_qword(size):tonumber() / 4
+    return oid_buf, oid_len
+end
+
+function sysctlbyname(name, oldp, oldp_len, newp, newp_len)
+    
+    local mib, mib_len = sysctl_name2oid(name)
+    if not mib then
         errorf("failed to translate sysctl name to mib (%s)", name)
     end
 
-    if syscall.sysctl(mib, 2, oldp, oldp_len, newp, newp_len):tonumber() < 0 then
+    if syscall.sysctl(mib, mib_len, oldp, oldp_len, newp, newp_len):tonumber() < 0 then
         return false
     end
 
@@ -195,6 +206,54 @@ function get_version()
     end
 
     return version
+end
+
+function read_main_socid()
+
+    local socid = nil
+    
+    local buf = memory.alloc(0x8)
+    local size = memory.alloc(0x8)
+    memory.write_qword(size, 4)
+
+    if sysctlbyname("hw.sce_main_socid", buf, size, 0, 0) then
+        socid = memory.read_dword(buf):tonumber()
+    end
+
+    return socid
+end
+
+function get_ps5_model()
+    local ps5_soc_models = {
+        [0x840f80] = "fat",
+        [0x840f81] = "slim",
+        [0x840fd0] = "pro",
+    }
+
+    local base = ps5_soc_models[read_main_socid()]
+    if not base then
+        return nil
+    end
+
+    local has_drive = sysctl_name2oid("kern.cam.cd.0.minimum_cmd_size") ~= nil
+
+    if base == "pro" then
+        if has_drive then return "pro w/ bluray drive" end
+        return "pro"
+    end
+
+    if not has_drive then
+        return base .. " digital"
+    end
+
+    return base
+end
+
+function get_console_model()
+    if PLATFORM == "ps5" then
+        local model = get_ps5_model()
+        return (model and model .. " " or "")
+    end
 end
 
 -- note: unsupported value types are ignored in the result

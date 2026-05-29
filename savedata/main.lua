@@ -137,9 +137,11 @@ function remote_lua_loader(port)
     else
         network_str = string.format("port %d", port)
     end
+    
+    local console_model = get_console_model()
 
-    notify(string.format("remote lua loader\nrunning on %s %s\nlistening on %s",
-        PLATFORM, FW_VERSION, network_str))
+    notify(string.format("remote lua loader\nrunning on %s %s%s\nlistening on %s",
+        PLATFORM, console_model, FW_VERSION, network_str))
 
     while true do
 
