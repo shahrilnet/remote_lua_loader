@@ -249,11 +249,49 @@ function get_ps5_model()
     return base
 end
 
-function get_console_model()
-    if PLATFORM == "ps5" then
-        local model = get_ps5_model()
-        return (model and model .. " " or "")
+function get_ps4_model()
+    local buf  = memory.alloc(0x8)
+    local size = memory.alloc(0x8)
+
+    -- Only the Slim lacks optical out. Untested
+    if sysctl_name2oid("hw.config.optical_out") ~= nil then
+        memory.write_qword(size, 4)
+        local optical_out = nil
+        if sysctlbyname("hw.config.optical_out", buf, size, 0, 0) then
+            optical_out = memory.read_dword(buf):tonumber()
+        end
+        if optical_out == 0 then
+            return "slim"
+        end
     end
+
+    -- Has optical out (Fat or Pro): use neomode to split them
+    if sysctl_name2oid("kern.neomode") == nil then
+        return "fat"
+    end
+
+    buf  = memory.alloc(0x8)
+    memory.write_qword(size, 4)
+    local neomode = nil
+    if sysctlbyname("kern.neomode", buf, size, 0, 0) then
+        neomode = memory.read_dword(buf):tonumber()
+    end
+
+    if neomode == 1 then
+        return "pro"
+    end
+
+    return "fat"
+end
+
+function get_console_model()
+    local model = nil
+    if PLATFORM == "ps5" then
+        model = get_ps5_model()
+    else
+        model = get_ps4_model()
+    end
+    return (model and model .. " " or "")
 end
 
 -- note: unsupported value types are ignored in the result
