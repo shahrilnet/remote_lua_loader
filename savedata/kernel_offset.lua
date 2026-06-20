@@ -4,9 +4,7 @@
 -- https://github.com/hammer-83/ps5-jar-loader/blob/main/sdk/src/main/java/org/ps5jb/sdk/core/kernel/KernelOffsets.java
 
 ps5_kernel_offset_list = {
-
     [{ "1.00", "1.01", "1.02" }] = {
-
         DATA_BASE = 0x01B40000,
         DATA_SIZE = 0x08631930,
 
@@ -21,11 +19,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x1C,
         PMAP_STORE_DMPML4I = 0x288,
-        PMAP_STORE_DMPDPI = 0x28C,
+        PMAP_STORE_DMPDPI = 0x28C
     },
-    
     [{ "1.05", "1.10", "1.11", "1.12", "1.13", "1.14" }] = {
-
         DATA_BASE = 0x01B40000,
         DATA_SIZE = 0x08631930,
 
@@ -40,11 +36,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x1C,
         PMAP_STORE_DMPML4I = 0x288,
-        PMAP_STORE_DMPDPI = 0x28C,
+        PMAP_STORE_DMPDPI = 0x28C
     },
-    
     [{ "2.00", "2.20", "2.25", "2.26", "2.30", "2.50", "2.70" }] = {
-
         DATA_BASE = 0x01B80000,
         DATA_SIZE = 0x087E1930,
 
@@ -59,11 +53,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x1C,
         PMAP_STORE_DMPML4I = 0x288,
-        PMAP_STORE_DMPDPI = 0x28C,
+        PMAP_STORE_DMPDPI = 0x28C
     },
-
     [{ "3.00", "3.20", "3.21" }] = {
-
         DATA_BASE = 0x0BD0000,
         DATA_SIZE = 0x08871930,
 
@@ -78,11 +70,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x1C,
         PMAP_STORE_DMPML4I = 0x288,
-        PMAP_STORE_DMPDPI = 0x28C,
+        PMAP_STORE_DMPDPI = 0x28C
     },
-
     [{ "4.00", "4.02", "4.03", "4.50", "4.51" }] = {
-
         DATA_BASE = 0x0C00000,
         DATA_SIZE = 0x087B1930,
 
@@ -97,11 +87,10 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x1C,
         PMAP_STORE_DMPML4I = 0x288,
-        PMAP_STORE_DMPDPI = 0x28C,
+        PMAP_STORE_DMPDPI = 0x28C
     },
 
     [{ "5.00", "5.02" , "5.10"}] = {
-
         DATA_BASE = 0x0C40000,
         DATA_SIZE = 0x08921930,
 
@@ -116,11 +105,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x105C,
         PMAP_STORE_DMPML4I = 0x29C,
-        PMAP_STORE_DMPDPI = 0x2A0,
+        PMAP_STORE_DMPDPI = 0x2A0
     },
-
     [{ "5.50" }] = {
-
         DATA_BASE = 0x0C40000,
         DATA_SIZE = 0x08921930,
 
@@ -135,11 +122,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x105C,
         PMAP_STORE_DMPML4I = 0x29C,
-        PMAP_STORE_DMPDPI = 0x2A0,
+        PMAP_STORE_DMPDPI = 0x2A0
     },
-    
     [{ "6.00", "6.02", "6.50" }] = {
-
         DATA_BASE = 0x0C60000,  -- Unconfirmed
         DATA_SIZE = 0x08861930,
 
@@ -154,11 +139,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x105C,
         PMAP_STORE_DMPML4I = 0x29C,
-        PMAP_STORE_DMPDPI = 0x2A0,
+        PMAP_STORE_DMPDPI = 0x2A0
     },
-
     [{ "7.00", "7.01", "7.20", "7.40", "7.60", "7.61" }] = {
-
         DATA_BASE = 0x0C50000,
         DATA_SIZE = 0x05191930,
 
@@ -173,11 +156,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = -0x10AC,
         PMAP_STORE_DMPML4I = 0x29C,
-        PMAP_STORE_DMPDPI = 0x2A0,
+        PMAP_STORE_DMPDPI = 0x2A0
     },
-    
-        [{ "8.00", "8.20", "8.40", "8.60" }] = {
-
+    [{ "8.00", "8.20", "8.40", "8.60" }] = {
         DATA_BASE = 0xC70000,
         DATA_SIZE = nil,
 
@@ -189,14 +170,12 @@ ps5_kernel_offset_list = {
         DATA_BASE_KERNEL_PMAP_STORE = 0x2E48848,
         DATA_BASE_DATA_CAVE = nil,
         DATA_BASE_GVMSPACE = 0x2EAA090,
-    
+
         PMAP_STORE_PML4PML4I = nil,
         PMAP_STORE_DMPML4I = nil,
-        PMAP_STORE_DMPDPI = nil,
+        PMAP_STORE_DMPDPI = nil
     },
-
     [{ "9.00" }] = {
-
         DATA_BASE = 0xCA0000,
         DATA_SIZE = nil,
 
@@ -211,12 +190,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = nil,
         PMAP_STORE_DMPML4I = nil,
-        PMAP_STORE_DMPDPI = nil,
-
+        PMAP_STORE_DMPDPI = nil
     },
-
     [{ "9.05", "9.20", "9.40", "9.60" }] = {
-
         DATA_BASE = 0xCA0000,
         DATA_SIZE = nil,
 
@@ -231,12 +207,9 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = nil,
         PMAP_STORE_DMPML4I = nil,
-        PMAP_STORE_DMPDPI = nil,
-
+        PMAP_STORE_DMPDPI = nil
     },
-
     [{ "10.00", "10.01" }] = {
-
         DATA_BASE = 0xCC0000,
         DATA_SIZE = nil,
 
@@ -251,16 +224,148 @@ ps5_kernel_offset_list = {
 
         PMAP_STORE_PML4PML4I = nil,
         PMAP_STORE_DMPML4I = nil,
-        PMAP_STORE_DMPDPI = nil,
-    },
+        PMAP_STORE_DMPDPI = nil
+    }
 }
 
 ps4_kernel_offset_list = {
+    [{ "5.00", "5.01" }] = {
+        EVF_OFFSET          = 0x7b3ed4,
+        PRISON0             = 0x10986a0,
+        ROOTVNODE           = 0x22c19f0,
+        SYSENT_661_OFFSET   = 0x1084200,
+        JMP_RSI_GADGET      = 0x13460
+    },
+    [{ "5.03" }] = {
+        EVF_OFFSET          = 0x7b42e4,
+        PRISON0             = 0x10986a0,
+        ROOTVNODE           = 0x22c1a70,
+        SYSENT_661_OFFSET   = 0x1084200,
+        JMP_RSI_GADGET      = 0x13460
+    },
+    [{ "5.05", "5.07" }] = {
+        EVF_OFFSET          = 0x7b42a4,
+        PRISON0             = 0x10986a0,
+        ROOTVNODE           = 0x22c1a70,
+        SYSENT_661_OFFSET   = 0x1084200,
+        JMP_RSI_GADGET      = 0x13460
+    },
+    [{ "5.50" }] = {
+        EVF_OFFSET          = 0x80ef12,
+        PRISON0             = 0x1134180,
+        ROOTVNODE           = 0x22ef570,
+        SYSENT_661_OFFSET   = 0x111d8b0,
+        JMP_RSI_GADGET      = 0xaf8c
+    },
+    [{ "5.53" }] = {
+        EVF_OFFSET          = 0x80ede2,
+        PRISON0             = 0x1134180,
+        ROOTVNODE           = 0x22ef570,
+        SYSENT_661_OFFSET   = 0x111d8b0,
+        JMP_RSI_GADGET      = 0xaf8c
+    },
+    [{ "5.55" }] = {
+        EVF_OFFSET          = 0x80f482,
+        PRISON0             = 0x1139180,
+        ROOTVNODE           = 0x22f3570,
+        SYSENT_661_OFFSET   = 0x11228b0,
+        JMP_RSI_GADGET      = 0xaf8c
+    },
+    [{ "5.56" }] = {
+        EVF_OFFSET          = 0x7c8971,
+        PRISON0             = 0x1139180,
+        ROOTVNODE           = 0x22f3570,
+        SYSENT_661_OFFSET   = 0x1123130,
+        JMP_RSI_GADGET      = 0x3f0c9
+    },
+    [{ "6.00", "6.02" }] = {
+        EVF_OFFSET          = 0x7c8971,
+        PRISON0             = 0x1139458,
+        ROOTVNODE           = 0x21bfac0,
+        SYSENT_661_OFFSET   = 0x1123130,
+        JMP_RSI_GADGET      = 0x3f0c9
+    },
+    [{ "6.20" }] = {
+        EVF_OFFSET          = 0x7c8e31,
+        PRISON0             = 0x113d458,
+        ROOTVNODE           = 0x21c3ac0,
+        SYSENT_661_OFFSET   = 0x1127130,
+        JMP_RSI_GADGET      = 0x2be6e
+    },
+    [{ "6.50" }] = {
+        EVF_OFFSET          = 0x7c6019,
+        PRISON0             = 0x113d4f8,
+        ROOTVNODE           = 0x2300320,
+        SYSENT_661_OFFSET   = 0x1124bf0,
+        JMP_RSI_GADGET      = 0x15a50d
+    },
+    [{ "6.51" }] = {
+        EVF_OFFSET          = 0x7c6099,
+        PRISON0             = 0x113d4f8,
+        ROOTVNODE           = 0x2300320,
+        SYSENT_661_OFFSET   = 0x1124bf0,
+        JMP_RSI_GADGET      = 0x15a50d
+    },
+    [{ "6.70", "6.71", "6.72" }] = {
+        EVF_OFFSET          = 0x7c7829,
+        PRISON0             = 0x113e518,
+        ROOTVNODE           = 0x2300320,
+        SYSENT_661_OFFSET   = 0x1125bf0,
+        JMP_RSI_GADGET      = 0x9d11d
+    },
+    [{ "7.00", "7.01", "7.02" }] = {
+        EVF_OFFSET          = 0x7f92cb,
+        PRISON0             = 0x113e398,
+        ROOTVNODE           = 0x22c5750,
+        SYSENT_661_OFFSET   = 0x112d250,
+        JMP_RSI_GADGET      = 0x6b192
+    },
+    [{ "7.50" }] = {
+        EVF_OFFSET          = 0x79a92e,
+        PRISON0             = 0x113b728,
+        ROOTVNODE           = 0x1b463e0,
+        SYSENT_661_OFFSET   = 0x1129f30,
+        JMP_RSI_GADGET      = 0x1f842
+    },
+    [{ "7.51", "7.55" }] = {
+        EVF_OFFSET          = 0x79a96e,
+        PRISON0             = 0x113b728,
+        ROOTVNODE           = 0x1b463e0,
+        SYSENT_661_OFFSET   = 0x1129f30,
+        JMP_RSI_GADGET      = 0x1f842
+    },
+    [{ "8.00", "8.01", "8.03" }] = {
+        EVF_OFFSET          = 0x7edcff,
+        PRISON0             = 0x111a7d0,
+        ROOTVNODE           = 0x1b8c730,
+        SYSENT_661_OFFSET   = 0x11040c0,
+        JMP_RSI_GADGET      = 0xe629c
+    },
+    [{ "8.50", "8.52" }] = {
+        EVF_OFFSET          = 0x7da91c,
+        PRISON0             = 0x111a8f0,
+        ROOTVNODE           = 0x1c66150,
+        SYSENT_661_OFFSET   = 0x11041b0,
+        JMP_RSI_GADGET      = 0xc810d
+    },
     [{ "9.00" }] = {
         EVF_OFFSET          = 0x7f6f27,
         PRISON0             = 0x111f870,
         ROOTVNODE           = 0x21eff20,
-        TARGET_ID_OFFSET    = 0x221688d,
+        SYSENT_661_OFFSET   = 0x1107f00,
+        JMP_RSI_GADGET      = 0x4c7ad
+    },
+    [{ "9.00" }] = {
+        EVF_OFFSET          = 0x7f6f27,
+        PRISON0             = 0x111f870,
+        ROOTVNODE           = 0x21eff20,
+        SYSENT_661_OFFSET   = 0x1107f00,
+        JMP_RSI_GADGET      = 0x4c7ad
+    },
+    [{ "9.00" }] = {
+        EVF_OFFSET          = 0x7f6f27,
+        PRISON0             = 0x111f870,
+        ROOTVNODE           = 0x21eff20,
         SYSENT_661_OFFSET   = 0x1107f00,
         JMP_RSI_GADGET      = 0x4c7ad
     },
@@ -268,7 +373,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x7f4ce7,
         PRISON0             = 0x111b840,
         ROOTVNODE           = 0x21ebf20,
-        TARGET_ID_OFFSET    = 0x221288d,
         SYSENT_661_OFFSET   = 0x1103f00,
         JMP_RSI_GADGET      = 0x5325b
     },
@@ -276,7 +380,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x769a88,
         PRISON0             = 0x11137d0,
         ROOTVNODE           = 0x21a6c30,
-        TARGET_ID_OFFSET    = 0x221a40d,
         SYSENT_661_OFFSET   = 0x1100ee0,
         JMP_RSI_GADGET      = 0x15a6d
     },
@@ -284,7 +387,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x7b5133,
         PRISON0             = 0x111b8b0,
         ROOTVNODE           = 0x1b25bd0,
-        TARGET_ID_OFFSET    = 0x1b9e08d,
         SYSENT_661_OFFSET   = 0x110a980,
         JMP_RSI_GADGET      = 0x68b1
     },
@@ -292,7 +394,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x7a7b14,
         PRISON0             = 0x111b910,
         ROOTVNODE           = 0x1bf81f0,
-        TARGET_ID_OFFSET    = 0x1be460d,
         SYSENT_661_OFFSET   = 0x110a5b0,
         JMP_RSI_GADGET      = 0x50ded
     },
@@ -300,7 +401,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x7fc26f,
         PRISON0             = 0x111f830,
         ROOTVNODE           = 0x2116640,
-        TARGET_ID_OFFSET    = 0x221c60d,
         SYSENT_661_OFFSET   = 0x1109350,
         JMP_RSI_GADGET      = 0x71a21
     },
@@ -308,7 +408,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x7fc22f,
         PRISON0             = 0x111f830,
         ROOTVNODE           = 0x2116640,
-        TARGET_ID_OFFSET    = 0x221c60d,
         SYSENT_661_OFFSET   = 0x1109350,
         JMP_RSI_GADGET      = 0x71a21
     },
@@ -316,7 +415,6 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x784318,
         PRISON0             = 0x111fa18,
         ROOTVNODE           = 0x2136e90,
-        TARGET_ID_OFFSET    = 0x21cc60d,
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x704d5
     },
@@ -324,10 +422,10 @@ ps4_kernel_offset_list = {
         EVF_OFFSET          = 0x784798,
         PRISON0             = 0x111fa18,
         ROOTVNODE           = 0x2136e90,
-        TARGET_ID_OFFSET    = 0x21cc60d,
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x47b31
     }
+    -- 12.50, 12.52, 13.00, 13.02
 }
 
 function get_ps5_kernel_offset()
@@ -403,7 +501,7 @@ function get_ps4_kernel_offset()
     -- filedesc
     kernel_offset.FILEDESC_OFILES = 0x0
     kernel_offset.SIZEOF_OFILES = 0x8
-    
+
     -- vmspace structure
     kernel_offset.VMSPACE_VM_PMAP = -1
     kernel_offset.VMSPACE_VM_VMID = -1
@@ -440,11 +538,11 @@ end
 function find_vmspace_pmap_offset()
 
     local vmspace = kernel.read_qword(kernel.addr.curproc + kernel_offset.PROC_VM_SPACE)
-    
+
     -- Note, this is the offset of vm_space.vm_map.pmap on 1.xx.
     -- It is assumed that on higher firmwares it's only increasing.
     local cur_scan_offset = 0x1C8
-    
+
     for i=1,6 do
         local scan_val = kernel.read_qword(vmspace + cur_scan_offset + (i * 8))
         local offset_diff = (scan_val - vmspace):tonumber()
@@ -465,7 +563,7 @@ function find_vmspace_vmid_offset()
     -- Note, this is the offset of vm_space.vm_map.vmid on 1.xx.
     -- It is assumed that on higher firmwares it's only increasing.
     local cur_scan_offset = 0x1D4
-    
+
     for i=1,8 do
         local scan_offset = cur_scan_offset + (i * 4)
         local scan_val = kernel.read_dword(vmspace + scan_offset):tonumber()
