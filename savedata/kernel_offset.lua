@@ -327,7 +327,31 @@ ps4_kernel_offset_list = {
         TARGET_ID_OFFSET    = 0x21cc60d,
         SYSENT_661_OFFSET   = 0x110a760,
         JMP_RSI_GADGET      = 0x47b31
-    }
+    },
+    [{ "12.50", "12.52"}] {
+        EVF_OFFSET          = 0x784858,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d,
+        SYSENT_661_OFFSET   = 0x110a760,
+        JMP_RSI_GADGET      = 0x47b31
+    },
+    [{ "13.00", "13.02", "13.04" }] = {
+        EVF_OFFSET          = 0x7849D8,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d,
+        SYSENT_661_OFFSET   = 0x110a760,
+        JMP_RSI_GADGET      = 0x47b31
+    },
+    [{ "13.50" }] = {
+        EVF_OFFSET          = 0x784E18,
+        PRISON0             = 0x111fa18,
+        ROOTVNODE           = 0x2136e90,
+        TARGET_ID_OFFSET    = 0x21cc60d,
+        SYSENT_661_OFFSET   = 0x110a760,
+        JMP_RSI_GADGET      = 0x47b31
+    },
 }
 
 function get_ps5_kernel_offset()
